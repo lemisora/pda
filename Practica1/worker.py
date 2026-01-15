@@ -8,7 +8,7 @@ from common import rec_msg, send_msg
 
 # Configuración local
 STORAGE_DIR = Path("./archivos")
-MASTER_IP = "100.x.y.z"  # IP de Tailscale del Maestro
+MASTER_IP = "100.107.126.50"  # IP de Tailscale del Maestro
 MASTER_PORT = 5000
 WORKER_PORT = 5001
 
