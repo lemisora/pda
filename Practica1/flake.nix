@@ -5,13 +5,17 @@
 
   outputs = { self, nixpkgs }:
     let
-      pkgs = import nixpkgs { system = "x86_64-linux"; };
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
     in
     {
-      packages.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          conda-shell
+      devShells.${system}.default = pkgs.mkShell {
+        packages = with pkgs; [
+          conda
         ];
+        shellHook = ''
+          echo "Entering the PDA Practica 1 environment"
+        '';
       };
     };
 }
