@@ -8,19 +8,19 @@ from common import rec_msg, send_msg
 
 # Configuración local
 STORAGE_DIR = Path("./archivos")
-MASTER_IP = "100.107.126.50"  # IP de Tailscale del Maestro
+MASTER_IP = "100.107.126.50"
 MASTER_PORT = 5000
 WORKER_PORT = 5001
 
+# Función para obtener el total de archivos creados en cada nodo
 def get_local_file_count():
-    """Cuenta archivos físicos en el directorio de almacenamiento."""
     if not STORAGE_DIR.exists():
         STORAGE_DIR.mkdir(parents=True)
     # Contamos solo archivos, ignorando carpetas
     return len([f for f in STORAGE_DIR.iterdir() if f.is_file()])
 
+# Intérprete básico de los comandos que el sistema empleará
 def handle_shell_request(conn, addr):
-    """Maneja las peticiones de creación de archivos enviadas por la Shell."""
     try:
         data = rec_msg(conn)
         if data and data.get("action") == "TOUCH":
@@ -37,12 +37,13 @@ def handle_shell_request(conn, addr):
     finally:
         conn.close()
 
+# Función para inicializar un nodo
 def start_worker():
-    # 1. Preparar almacenamiento
+    # Preparar almacenamiento
     initial_count = get_local_file_count()
     print(f"[*] Almacenamiento listo en '{STORAGE_DIR}'. Conteo inicial: {initial_count}")
 
-    # 2. Registrarse con el Maestro
+    # Registrarse con el Maestro
     try:
         master_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         master_sock.connect((MASTER_IP, MASTER_PORT))
@@ -56,7 +57,7 @@ def start_worker():
         print(f"[!] No se pudo contactar al Maestro: {e}")
         return
 
-    # 3. Escuchar peticiones de la Shell (Cliente)
+    # Escuchar peticiones de la Shell (Cliente)
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(("0.0.0.0", WORKER_PORT))
