@@ -1,18 +1,20 @@
-import json
 import socket
 import threading
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from common import (  # Asumiendo las funciones de utilidad previas
+from common import (
     rec_msg,
     send_msg,
 )
 
 
+# Clase que sirve como contenedor para las configuraciones de almacenamiento del sistema distribuido
 class StorageManager:
     def __init__(self, threshold: int):
+        # Se usa un Lock para concurrencia
         self.lock = threading.Lock()
+        # Umbral para usar otro nodo
         self.threshold = threshold
         self.metadata: Dict[
             str, str
@@ -21,6 +23,7 @@ class StorageManager:
             str, Dict
         ] = {}  # Estructura esperada 'IP_Worker' y 'detalles_nodo'
 
+    # Función para registrar a un nodo (worker)
     def register_worker(self, ip: str, count: int):
         with self.lock:
             self.nodes[ip] = {
@@ -30,6 +33,7 @@ class StorageManager:
             }
             print(f"Worker {ip} registrado con {count} archivos")
 
+    # Se obtiene el nodo al que escribir el archivo
     def get_target_node(self) -> Optional[str]:
         with self.lock:
             # Buscamos el primer nodo que no supere el umbral
@@ -37,10 +41,10 @@ class StorageManager:
                 if data["file_count"] < self.threshold:
                     return ip
 
-            # Fallback: Si todos están llenos, podrías devolver el último
-            # o manejar un error de 'Almacenamiento Lleno'
+            # Si todos están llenos, se devuelve el último
             return list(self.nodes.keys())[-1] if self.nodes else None
 
+    # Se añade un archivo al registro del almacenamiento distribuido
     def add_file_record(self, filename: str, worker_ip: str):
         with self.lock:
             self.metadata[filename] = worker_ip
@@ -50,14 +54,15 @@ class StorageManager:
                     "%Y-%m-%d %H:%M:%S"
                 )
 
+    # Obtener el nombre de los archivos registrados en el sistema mediante los metadatos
     def get_all_files(self) -> List[str]:
         with self.lock:
             return list(self.metadata.keys())
 
 
+# Función para manejar conexiones/petición con los nodos (workers)
 def handle_client(conn, addr, manager):
-    """Maneja la comunicación individual con cada socket."""
-    print(f"[+] Nueva conexión desde {addr}")
+    print(f"[+] Nueva petición desde {addr[0]}")
     try:
         while True:
             data = rec_msg(conn)
@@ -67,30 +72,41 @@ def handle_client(conn, addr, manager):
             action = data.get("action")
             response = {"status": "error", "message": "Acción desconocida"}
 
-            # --- Dispatcher de Acciones ---
+            # Dispatcher de comandos (Acciones)
+
+            # En caso de que se añada un nodo
             if action == "REGISTER_WORKER":
                 manager.register_worker(addr[0], data["count"])
                 response = {"status": "success"}
 
+            # En caso de que se solicite escribir al almacenamiento de un nodo
+            # (obtener el nodo específico al que escribir)
             elif action == "GET_WRITE_NODE":
                 target_ip = manager.get_target_node()
                 response = {"status": "success", "ip": target_ip}
 
+            # En caso de que se necesite crear un archivo
             elif action == "CONFIRM_TOUCH":
                 target_ip = data.get("worker_ip")
                 manager.add_file_record(data["filename"], target_ip)
                 response = {"status": "success"}
 
+            # En caso de que se solicite listar los archivos en 'archivos/'
             elif action == "LIST_FILES":
                 files = manager.get_all_files()
                 response = {"status": "success", "files": files}
 
+            # En caso de que se consulte el estado de los nodos
             elif action == "GET_STATUS":
-                # manager.nodes ya contiene la IP, el conteo y el estado
                 response = {
                     "status": "success",
                     "nodes": manager.nodes,
                     "total_archivos": len(manager.metadata),
+                }
+            elif action == "GET_CONFIG":
+                response = {
+                    "status": "success",
+                    "threshold": manager.threshold,  # Enviamos el valor real del manager
                 }
 
             send_msg(conn, response)
@@ -100,6 +116,7 @@ def handle_client(conn, addr, manager):
         conn.close()
 
 
+# Función para comenzar a ejecutar el nodo 'maestro'
 def start_master(host="0.0.0.0", port=5000):
     manager = StorageManager(threshold=5)
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
