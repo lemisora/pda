@@ -77,7 +77,8 @@ def handle_client(conn, addr, manager):
                 response = {"status": "success", "ip": target_ip}
 
             elif action == "CONFIRM_TOUCH":
-                manager.add_file_record(data["filename"], addr[0])
+                target_ip = data.get("worker_ip")
+                manager.add_file_record(data["filename"], target_ip)
                 response = {"status": "success"}
 
             elif action == "LIST_FILES":
@@ -100,7 +101,7 @@ def handle_client(conn, addr, manager):
 
 
 def start_master(host="0.0.0.0", port=5000):
-    manager = StorageManager(threshold=20)
+    manager = StorageManager(threshold=5)
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 

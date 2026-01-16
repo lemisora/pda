@@ -64,15 +64,14 @@ class DistrubutedShell(cmd.Cmd):
             worker_res = rec_msg(worker_sock)
             worker_sock.close()
 
-            # 3. Confirmar al Maestro que el archivo existe físicamente
+            # En el do_touch de tu shell_client.py
             if worker_res and worker_res["status"] == "success":
                 with self._connect_master() as master:
                     send_msg(master, {
-                        "action": "CONFIRM_TOUCH",
+                        "action": "CONFIRM_TOUCH", 
                         "filename": filename,
-                        "worker_ip": target_worker_ip
+                        "worker_ip": target_worker_ip # La IP que el maestro te dio al inicio del touch
                     })
-                print(f"{Fore.GREEN}Archivo '{filename}' creado exitosamente.")
 
         except Exception as e:
             print(f"{Fore.RED}Error durante la operación touch: {e}")
