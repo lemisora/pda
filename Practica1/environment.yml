@@ -1,0 +1,7 @@
+name: pda
+channels:
+  - defaults
+dependencies:
+  - colorama
+  - python=3.12
+prefix: /home/lemisora/.conda/envs/pda
