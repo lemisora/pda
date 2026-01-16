@@ -1,4 +1,5 @@
 import cmd
+import os
 import socket
 
 from colorama import Fore, Style, init
@@ -13,10 +14,16 @@ class DistrubutedShell(cmd.Cmd):
         Fore.CYAN
         + "Bienvenido a la Shell del Sistema Distribuido. Escribe help para ver comandos.\n"
     )
-    prompt = f"{Fore.GREEN}user@host{Style.RESET_ALL}:{Fore.BLUE}~{Style.RESET_ALL}$ "
 
     def __init__(self, master_ip, master_port=5000):
         super().__init__()
+        
+        # Obtener datos del sistema de forma dinámica
+        user = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
+        hostname = socket.gethostname()
+        
+        self.prompt = f"{Fore.GREEN}{user}@{hostname}{Style.RESET_ALL}:{Fore.BLUE}~{Style.RESET_ALL}$ "
+        
         self.master_addr = (master_ip, master_port)
         self.worker_port = 5001  # Puerto donde escuchan los workers
         # Obtenemos el umbral del maestro al iniciar
