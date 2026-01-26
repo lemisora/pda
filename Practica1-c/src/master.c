@@ -2,7 +2,10 @@
 #include "include/list.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "include/protocolo.h"
+#include "sys/socket.h"
 #include <unistd.h>
+#include <string.h>
 
 // Struct para almacenar el estado del maestro
 typedef struct status {
@@ -85,4 +88,41 @@ void mostrar_archivos_maestro(status_t* master) {
         printf("%s  ", list_get(master->files, i));
     }
     printf("\n");
+}
+
+void procesar_solicitud_cliente(int socket_cliente, status_t* master_status){
+    paquete_t paquete;
+    if (recv(socket_cliente, &paquete, sizeof(paquete_t), 0) <= 0) return;
+    
+    switch (paquete.accion) {
+        case REG_WORKER:
+            // paquete.nombre contiene la IP del worker
+            list_add(master_status->workers, paquete.msg);
+            printf("[MASTER] Nodo %s registrado.\n", paquete.msg);
+            break;
+        case SOLICITAR_WORKER: {
+            char* ip_asignada = obtener_ip_destino(master_status);
+            if(ip_asignada == NULL) {
+                fprintf(stderr, "[MASTER] No hay workers disponibles\n");
+                break;
+            }
+            
+            // Preparamos respuesta
+            paquete_t respuesta;
+            respuesta.accion = SOLICITAR_WORKER;
+            
+            strcpy(respuesta.msg, ip_asignada ? ip_asignada : "NULL");
+                
+            send(socket_cliente, &respuesta, sizeof(paquete_t), 0);
+            break;
+        }
+        case CONFIRM_WORKER:
+            // Añadimos a la lista de archivos
+            list_add(master_status->files, paquete.msg);
+            printf("[MASTER] Archivo '%s' confirmado en sistema.\n", paquete.msg);
+            break;
+    
+        default:
+            printf("[MASTER] Acción desconocida: %d\n", paquete.accion);
+        }
 }
