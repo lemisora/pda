@@ -7,7 +7,10 @@ sources = [
   'src/main.c',
   'src/protocolo.c',
   'src/almacenamiento.c',
-  'src/red.c'
+  'src/red.c',
+  'src/master.c',
+  'src/list.c',
+  
 ]
 
 src_shell = [
