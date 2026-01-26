@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "include/master.h"
+#include "include/worker.h"
 #include "protocolo.h"
 #include "almacenamiento.h"
 #include "red.h"
@@ -69,6 +70,7 @@ int main(int argc, char *argv[]) {
         // MODO 0: PASIVO (ESCLAVO)
         else if (strcmp(archivo_usuario, "0") == 0) {
             printf("\n[MODO 0 ACTIVADO] Modo silencioso. Solo escucho a los demas.\n");
+            worker(carpeta);
         }
 
         // MODO NOMBRE DE ARCHIVO (touch normal)

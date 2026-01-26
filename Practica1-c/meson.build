@@ -9,8 +9,8 @@ sources = [
   'src/almacenamiento.c',
   'src/red.c',
   'src/master.c',
+  'src/worker.c',
   'src/list.c',
-  
 ]
 
 src_shell = [
