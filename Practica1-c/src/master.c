@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <string.h>
 
+void* master_global_ptr = NULL;
+
 // Struct para almacenar el estado del maestro
 typedef struct status {
     int threshold;
@@ -45,6 +47,7 @@ int master(int threshold){
     status_t master_status;
 
     init_master(&master_status, threshold);
+    master_global_ptr = &master_status;
 
     printf("\nMaestro iniciado actualmente con: \n"
             "\tUmbral: %d\n"
@@ -56,9 +59,11 @@ int master(int threshold){
     );
 
     while(1){
-
+        sleep(1);
+        print_status_master(master_status);
     }
     // Liberar memoria al salir
+    master_global_ptr = NULL;
     if (master_status.workers) list_destroy(master_status.workers);
     if (master_status.files) list_destroy(master_status.files);
     return 0;
