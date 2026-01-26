@@ -34,7 +34,7 @@ Para que esto funcione correctamente, necesita las siguientes dependencias:
      nix profile install nixpkgs#devenv
      ```
   
-  - Una vez instaladas las dependencias de Nix, y habiendo cambiado al directorio de 'Practica1-c' debe ejecutarse el siguiente comando para así recargar la shell de desarrollo fácilmente al estar en ese directorio:
+  - Una vez instaladas las dependencias de Nix, y habiendo cambiado al directorio del repo debe ejecutarse el siguiente comando para así recargar la shell de desarrollo fácilmente al estar en ese directorio:
       ```bash
       direnv allow
       ```
