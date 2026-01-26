@@ -5,11 +5,12 @@
 #define MAX_ARCHIVOS 5
 
 typedef enum  { 
-    REG_WORKER = 0,
-    LIST_FILES = 1,
-    GET_STATUS = 2,
-    SOLICITAR_WORKER = 3,
-    CONFIRM_WORKER = 4,
+    REG_WORKER = 0, // De Worker -> Master
+    LIST_FILES = 1, // De Shell Worker -> Master
+    GET_STATUS = 2, // De Shell Worker -> Master
+    SOLICITAR_WORKER = 3,   // De Shell Worker -> Master
+    CONFIRM_WORKER = 4, // De Shell Worker -> Master
+    WRITE_FILE = 5, // De Shell  Worker -> Worker
 } action_t;
 
 typedef struct {
