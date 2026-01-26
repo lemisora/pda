@@ -18,6 +18,9 @@
     pkg-config
     gdb
     glibc.dev
+    readline
+    readline.dev
+    ncurses.dev
   ];
 
   # https://devenv.sh/languages/
@@ -36,7 +39,6 @@
 
   # https://devenv.sh/basics/
   enterShell = ''
-
   '';
 
   # https://devenv.sh/tasks/
