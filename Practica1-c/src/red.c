@@ -10,6 +10,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include "include/master.h"
+
+extern void* master_global_ptr;
 
 // Variables privadas del modulo
 static int mi_puerto = 0;
@@ -102,17 +105,34 @@ void *ciclo_servidor(void *arg) {
             continue;
         }
         
-        Datos llega;
-        read(s_cliente, &llega, sizeof(llega));
-        printf("Me llego peticion para: %s\n", llega.nombre);
+        // Datos llega;
+        // read(s_cliente, &llega, sizeof(llega));
+        // printf("Me llego peticion para: %s\n", llega.nombre);
 
-        // chequeo si quepo (usando funciones de almacenamiento)
-        int cuantos = contar_cosas(ruta);
-        if (cuantos < MAX_ARCHIVOS) {
-            hacer_archivo(ruta, llega.nombre);
-        } else {
-            printf("Estoy lleno (%d). Se lo paso al otro...\n", cuantos);
-            avisar_vecino(llega.nombre);
+        // // chequeo si quepo (usando funciones de almacenamiento)
+        // int cuantos = contar_cosas(ruta);
+        // if (cuantos < MAX_ARCHIVOS) {
+        //     hacer_archivo(ruta, llega.nombre);
+        // } else {
+        //     printf("Estoy lleno (%d). Se lo paso al otro...\n", cuantos);
+        //     avisar_vecino(llega.nombre);
+        // }
+        
+        paquete_t paquete;
+        if (recv(s_cliente, &paquete, sizeof(paquete_t), 0) > 0) {
+            // Si el puntero global del maestro existe, estamos en Modo Maestro
+            if (master_global_ptr != NULL) {
+                    procesar_solicitud_cliente(s_cliente, master_global_ptr);
+            } else {
+                // Lógica de Worker (Modo 0): Crear archivo físico o avisar vecino
+                printf("[WORKER] Me llegó petición para: %s\n", paquete.msg);
+                int cuantos = contar_cosas(ruta);
+                if (cuantos < MAX_ARCHIVOS) {
+                    hacer_archivo(ruta, paquete.msg);                        
+                } else {
+                    avisar_vecino(paquete.msg);
+                }
+            }
         }
         close(s_cliente);
     }
