@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <pthread.h>
 
 // Variable global para la ruta de almacenamiento
 static char STORAGE_DIR[256];
@@ -96,22 +97,67 @@ void atender_peticiones_shell(int server_fd) {
     }
 }
 
+// Función del Hilo: Envía "ALIVE" periódicamente
+void* thread_heartbeat(void* arg) {
+    HeartbeatConfig* cfg = (HeartbeatConfig*)arg;
+    
+    while(1) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock >= 0) {
+            struct sockaddr_in serv_addr;
+            serv_addr.sin_family = AF_INET;
+            serv_addr.sin_port = htons(cfg->master_port);
+            inet_pton(AF_INET, cfg->master_ip, &serv_addr.sin_addr);
+
+            // Conexión rápida (timeout implícito del OS)
+            if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == 0) {
+                paquete_t p;
+                p.accion = ALIVE;
+                strcpy(p.msg, cfg->my_ip);
+                p.valor = cfg->my_port;
+                
+                send_packet(sock, &p);
+                // No esperamos respuesta (fire and forget)
+            }
+            close(sock);
+        }
+        
+        sleep(5); // Latido cada 5 segundos
+    }
+    free(cfg);
+    return NULL;
+}
+
 int start_worker_node(char* master_ip, int master_port, char* my_ip, int my_port, char* dir) {
-    // 1. Configurar directorio
+    // Configurar directorio
     strcpy(STORAGE_DIR, dir);
     struct stat st = {0};
     if (stat(STORAGE_DIR, &st) == -1) {
         mkdir(STORAGE_DIR, 0777); // Crear carpeta si no existe
     }
 
-    // 2. Registrarse en el Master
+    // Registrarse en el Master
     // Intentamos registrar antes de levantar el servidor para asegurar que el Master nos conoce
     if (registrarse_en_master(master_ip, master_port, my_ip, my_port) != 0) {
         fprintf(stderr, "[FATAL] No se pudo registrar con el Master. Abortando.\n");
         return 1;
     }
 
-    // 3. Levantar Servidor (Bind & Listen)
+    // === LANZAR HEARTBEAT ===
+        pthread_t hb_thread;
+        HeartbeatConfig* cfg = malloc(sizeof(HeartbeatConfig));
+        strcpy(cfg->master_ip, master_ip);
+        cfg->master_port = master_port;
+        strcpy(cfg->my_ip, my_ip);
+        cfg->my_port = my_port;
+    
+        if (pthread_create(&hb_thread, NULL, thread_heartbeat, cfg) != 0) {
+            perror("Error creando hilo heartbeat");
+        }
+        pthread_detach(hb_thread); // Que corra libre
+        printf("[WORKER] Servicio de latidos iniciado.\n");
+    
+    // Levantar Servidor (Bind & Listen)
     int server_fd;
     struct sockaddr_in address;
     int opt = 1;
