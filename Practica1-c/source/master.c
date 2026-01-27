@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <stdio.h>
 
 // Puntero global para que los hilos accedan al Manager
 static StorageManager global_manager;
