@@ -12,6 +12,7 @@
 
   # https://devenv.sh/packages/
   packages = with pkgs;[
+    # Dependencias para desarrollo con C
     clang-tools
     meson
     ninja
@@ -21,11 +22,24 @@
     readline
     readline.dev
     ncurses.dev
+    
+    # Dependencias para desarrollo con Java
+    # Si se debe usar paquetes que estén en Nixpkgs, se añaden acá
+    # sino usar los de Maven con el pom.xml
   ];
 
-  # https://devenv.sh/languages/
   languages.c.enable = true;
-
+  
+  # Habilitar Java para el devenv
+  languages.java = {
+    enable = true;
+    jdk.package = pkgs.jdk17;
+    
+    # Se usará el Maven de JDK
+    maven = {
+      enable = true;
+    };
+  };  
   # https://devenv.sh/processes/
   # processes.dev.exec = "${lib.getExe pkgs.watchexec} -n -- ls -la";
 
