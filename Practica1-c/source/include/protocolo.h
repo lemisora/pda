@@ -9,6 +9,7 @@ typedef enum {
     SOLICITAR_WORKER = 3,
     CONFIRM_WORKER = 4,
     WRITE_FILE = 5,
+    ALIVE = 6,
     RESPUESTA_OK = 200,
     RESPUESTA_ERR = 500
 } action_t;
