@@ -48,6 +48,7 @@ void Manager_RegisterWorker(StorageManager* self, char* ip, int port) {
 
     if (existing) {
         existing->is_online = 1;
+        existing->last_seen = time(NULL);
         printf("[MANAGER] Worker reconectado: %s:%d\n", ip, port);
     } else {
         WorkerNode* new_node = malloc(sizeof(WorkerNode));
@@ -56,11 +57,29 @@ void Manager_RegisterWorker(StorageManager* self, char* ip, int port) {
             new_node->port = port;
             new_node->file_count = 0;
             new_node->is_online = 1;
+            new_node->last_seen = time(NULL);
             list_add(self->workers, new_node);
             printf("[MANAGER] Nuevo Worker registrado: %s:%d\n", ip, port);
         }
     }
     
+    pthread_mutex_unlock(&self->lock);
+}
+
+// Función auxiliar para procesar el latido
+void Manager_UpdateHeartbeat(StorageManager* self, char* ip, int port) {
+    pthread_mutex_lock(&self->lock);
+    for (size_t i = 0; i < list_size(self->workers); i++) {
+        WorkerNode* w = (WorkerNode*)list_get(self->workers, i);
+        if (strcmp(w->ip, ip) == 0 && w->port == port) {
+            w->last_seen = time(NULL);
+            if (!w->is_online) {
+                w->is_online = 1; // "Revivir" si estaba marcado como muerto
+                printf("[MONITOR] Worker %s:%d ha vuelto a la vida.\n", ip, port);
+            }
+            break;
+        }
+    }
     pthread_mutex_unlock(&self->lock);
 }
 
@@ -165,6 +184,12 @@ void* handle_client(void* arg) {
                 break;
             }
             
+            case ALIVE:
+                        // msg=IP, valor=Puerto (Así lo enviaremos desde el worker)
+                        Manager_UpdateHeartbeat(&global_manager, paquete.msg, paquete.valor);
+                        // No hace falta responderle nada al worker para ahorrar tráfico
+                        break;
+            
             case CONFIRM_WORKER:
                 // El mensaje viene formato "nombre_archivo|ip_worker|port_worker"
                 // Usamos strtok para separar (modifica el string in-place)
@@ -215,10 +240,27 @@ void* handle_client(void* arg) {
     return NULL;
 }
 
+// Actualizar status_monitor para detectar muertes
 void* status_monitor(void* arg) {
     while(1) {
-        sleep(10);
-        Manager_PrintStatus(&global_manager);
+        sleep(5); // Revisar cada 5 segundos
+        
+        pthread_mutex_lock(&global_manager.lock);
+        time_t now = time(NULL);
+        
+        for (size_t i = 0; i < list_size(global_manager.workers); i++) {
+            WorkerNode* w = (WorkerNode*)list_get(global_manager.workers, i);
+            
+            // Si pasan más de 15 segundos sin latido, se marca offline
+            if (w->is_online && difftime(now, w->last_seen) > 15.0) {
+                w->is_online = 0;
+                printf("[MONITOR] ¡ALERTA! Worker %s:%d no responde. Marcado OFFLINE.\n", w->ip, w->port);
+            }
+        }
+        pthread_mutex_unlock(&global_manager.lock);
+        
+        // Imprimir estado (Opcional, o moverlo a otro timer más lento)
+        // Manager_PrintStatus(&global_manager); 
     }
     return NULL;
 }

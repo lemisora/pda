@@ -3,6 +3,7 @@
 
 #include "dyn_list.h"
 #include <pthread.h>
+#include <time.h>
 
 // Estructura para representar un Worker individual
 typedef struct {
@@ -10,6 +11,7 @@ typedef struct {
     int port;
     int file_count;      // Cuántos archivos tiene este worker
     int is_online;       // 1 = activo, 0 = caído
+    time_t last_seen;    // Último tiempo que se ha comunicado con este worker
 } WorkerNode;
 
 // Para controlar el almacenamiento en cada nodo
