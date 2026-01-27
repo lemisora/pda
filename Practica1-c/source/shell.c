@@ -85,10 +85,14 @@ void cmd_touch(const char* master_ip, int master_port, char* filename) {
     recv_packet(sock_master, &res);
     close(sock_master);
 
-    if (res.accion != RESPUESTA_OK) {
-        printf("Error: El Master no asignó ningún worker.\n");
+    // Aceptamos OK u OVERFLOW como válidos (éxito operativo)
+    if (res.accion != RESPUESTA_OK && res.accion != RESPUESTA_OVERFLOW) {
+        printf("Error: No hay workers disponibles.\n");
         return;
     }
+    
+    // Detectamos si es desbordamiento internamente
+    int is_overflow = (res.accion == RESPUESTA_OVERFLOW);
 
     char worker_ip[20];
     strcpy(worker_ip, res.msg);
@@ -103,6 +107,9 @@ void cmd_touch(const char* master_ip, int master_port, char* filename) {
 
     req.accion = WRITE_FILE;
     strcpy(req.msg, filename);
+    
+    req.valor = is_overflow ? 1 : 0;
+    
     send_packet(sock_worker, &req);
 
     recv_packet(sock_worker, &res);
@@ -137,12 +144,9 @@ void cmd_status(const char* master_ip, int master_port) {
     send_packet(sock, &req);
     
     printf("Solicitud de estado enviada.\n");
-    // Aquí podrías implementar la recepción de respuesta si el Master manda algo
     
     close(sock);
 }
-
-// --- Procesamiento (Ahora propaga el contexto) ---
 
 void procesar_comando(char* linea, const char* master_ip, int master_port) {
     char* linea_copia = strdup(linea);

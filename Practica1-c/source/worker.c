@@ -82,14 +82,17 @@ void atender_peticiones_shell(int server_fd) {
             paquete_t res;
             
             if (req.accion == WRITE_FILE) {
+                // Chequear bandera de advertencia (req.valor)
+                if (req.valor == 1) {
+                    printf("\n[WORKER WARNING] ¡Atención! Se ha superado el umbral de almacenamiento.\n");
+                    printf("                 Operando en modo desbordamiento.\n");
+                }
+            
                 // req.msg contiene el nombre del archivo
                 crear_archivo_local(req.msg);
-                
+                            
                 res.accion = RESPUESTA_OK;
                 strcpy(res.msg, "Created");
-            } else {
-                res.accion = RESPUESTA_ERR;
-                strcpy(res.msg, "Unknown Action");
             }
             send_packet(client_sock, &res);
         }

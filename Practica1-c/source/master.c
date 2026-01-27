@@ -89,19 +89,25 @@ WorkerNode* Manager_GetTargetWorker(StorageManager* self) {
     WorkerNode* selected_node = NULL;
     size_t count = list_size(self->workers);
 
-    // Bucle para buscar espacio
+    // INTENTO 1: Buscar el candidato ideal (Online y con espacio)
     for (size_t i = 0; i < count; i++) {
         WorkerNode* w = (WorkerNode*)list_get(self->workers, i);
-        // Si está online Y tiene espacio
         if (w->is_online && w->file_count < self->threshold) {
-            selected_node = w; // Encontramos uno con espacio
+            selected_node = w;
             break;
         }
     }
     
-    // Fallback: Si todos están llenos, usamos el último disponible
-    if (!selected_node && count > 0) {
-        selected_node = (WorkerNode*)list_get(self->workers, count - 1);
+    // INTENTO 2: Si todos los ideales fallan, buscar CUALQUIERA que esté Online
+    // (Política de desbordamiento / Overflow)
+    if (!selected_node) {
+        for (size_t i = 0; i < count; i++) {
+            WorkerNode* w = (WorkerNode*)list_get(self->workers, i);
+            if (w->is_online) {
+                selected_node = w;
+                break; 
+            }
+        }
     }
 
     pthread_mutex_unlock(&self->lock);
@@ -167,18 +173,25 @@ void* handle_client(void* arg) {
                 break;
                 
             case SOLICITAR_WORKER: {
-                // Obtenemos el nodo completo
                 WorkerNode* target = Manager_GetTargetWorker(&global_manager);
                                 
                 if (target) {
-                    respuesta.accion = RESPUESTA_OK;
-                    strcpy(respuesta.msg, target->ip); // Enviamos IP
-                    respuesta.valor = target->port;    // Se envía el puerto
-                                    
-                    printf("[MASTER] Asignando worker %s:%d\n", target->ip, target->port);
+                    strcpy(respuesta.msg, target->ip);
+                    respuesta.valor = target->port;
+                
+                    // VERIFICACIÓN DE UMBRAL
+                    if (target->file_count >= global_manager.threshold) {
+                        // Avisamos a la Shell usando el código especial
+                        respuesta.accion = RESPUESTA_OVERFLOW; 
+                        printf("[MASTER WARNING] Asignando worker saturado %s:%d (%d archivos)\n", 
+                        target->ip, target->port, target->file_count);
+                    } else {
+                        respuesta.accion = RESPUESTA_OK;
+                        printf("[MASTER] Asignando worker %s:%d\n", target->ip, target->port);
+                    }
                 } else {
                     respuesta.accion = RESPUESTA_ERR;
-                    strcpy(respuesta.msg, "Full/No workers");
+                    strcpy(respuesta.msg, "No online workers");
                 }
                 send_packet(sock, &respuesta);
                 break;

@@ -11,6 +11,7 @@ typedef enum {
     WRITE_FILE = 5,
     ALIVE = 6,
     RESPUESTA_OK = 200,
+    RESPUESTA_OVERFLOW = 201,
     RESPUESTA_ERR = 500
 } action_t;
 
