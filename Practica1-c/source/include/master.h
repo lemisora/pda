@@ -36,7 +36,7 @@ void Manager_RegisterWorker(StorageManager* self, char* ip, int port);
 
 // Algoritmo de balanceo: Retorna la IP del worker ideal para escribir
 // Retorna NULL si no hay espacio
-char* Manager_GetTargetWorker(StorageManager* self);
+WorkerNode* Manager_GetTargetWorker(StorageManager* self);
 
 // Confirma que un archivo se creó exitosamente
 void Manager_AddFileRecord(StorageManager* self, char* filename, char* worker_ip, int worker_port);

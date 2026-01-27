@@ -64,26 +64,29 @@ void Manager_RegisterWorker(StorageManager* self, char* ip, int port) {
     pthread_mutex_unlock(&self->lock);
 }
 
-char* Manager_GetTargetWorker(StorageManager* self) {
+WorkerNode* Manager_GetTargetWorker(StorageManager* self) {
     pthread_mutex_lock(&self->lock);
-    char* selected_ip = NULL;
+    
+    WorkerNode* selected_node = NULL;
     size_t count = list_size(self->workers);
 
+    // Bucle para buscar espacio
     for (size_t i = 0; i < count; i++) {
         WorkerNode* w = (WorkerNode*)list_get(self->workers, i);
+        // Si está online Y tiene espacio
         if (w->is_online && w->file_count < self->threshold) {
-            selected_ip = w->ip;
+            selected_node = w; // Encontramos uno con espacio
             break;
         }
     }
     
-    if (!selected_ip && count > 0) {
-        WorkerNode* last = (WorkerNode*)list_get(self->workers, count - 1);
-        selected_ip = last->ip;
+    // Fallback: Si todos están llenos, usamos el último disponible
+    if (!selected_node && count > 0) {
+        selected_node = (WorkerNode*)list_get(self->workers, count - 1);
     }
 
     pthread_mutex_unlock(&self->lock);
-    return selected_ip; 
+    return selected_node; 
 }
 
 void Manager_AddFileRecord(StorageManager* self, char* filename, char* worker_ip, int worker_port) {
@@ -145,11 +148,15 @@ void* handle_client(void* arg) {
                 break;
                 
             case SOLICITAR_WORKER: {
-                char* target = Manager_GetTargetWorker(&global_manager);
+                // Obtenemos el nodo completo
+                WorkerNode* target = Manager_GetTargetWorker(&global_manager);
+                                
                 if (target) {
                     respuesta.accion = RESPUESTA_OK;
-                    strcpy(respuesta.msg, target);
-                    // Opcional: Enviar puerto si lo tuviéramos a mano, o dejar que Shell use default
+                    strcpy(respuesta.msg, target->ip); // Enviamos IP
+                    respuesta.valor = target->port;    // Se envía el puerto
+                                    
+                    printf("[MASTER] Asignando worker %s:%d\n", target->ip, target->port);
                 } else {
                     respuesta.accion = RESPUESTA_ERR;
                     strcpy(respuesta.msg, "Full/No workers");
