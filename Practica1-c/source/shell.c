@@ -116,10 +116,8 @@ void cmd_touch(const char* master_ip, int master_port, char* filename) {
         if (sock_master >= 0) {
             req.accion = CONFIRM_WORKER;
             
-            // Empaquetamos "nombre|ip" en el mensaje
-            // Ejemplo: "hola.txt|100.107.126.50"
-                        
-            snprintf(req.msg, sizeof(req.msg), "%s|%s", filename, worker_ip);
+            // Formato: "nombre|ip|puerto"
+            snprintf(req.msg, sizeof(req.msg), "%s|%s|%d", filename, worker_ip, worker_port);
             
             send_packet(sock_master, &req);
             close(sock_master);

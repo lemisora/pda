@@ -86,24 +86,26 @@ char* Manager_GetTargetWorker(StorageManager* self) {
     return selected_ip; 
 }
 
-void Manager_AddFileRecord(StorageManager* self, char* filename, char* worker_ip) {
+void Manager_AddFileRecord(StorageManager* self, char* filename, char* worker_ip, int worker_port) {
     pthread_mutex_lock(&self->lock);
     
     list_add(self->files, strdup(filename));
     
-    // Buscar worker para incrementar contador
-    // Nota: Si worker_ip es "UNK" o no se encuentra, solo agregamos el archivo a la lista global
+    // Buscar worker EXACTO (IP + Puerto)
     if (worker_ip) {
         for (size_t i = 0; i < list_size(self->workers); i++) {
             WorkerNode* w = (WorkerNode*)list_get(self->workers, i);
-            if (strcmp(w->ip, worker_ip) == 0) {
+            
+            // Solo sumamos si coinciden AMBOS
+            if (strcmp(w->ip, worker_ip) == 0 && w->port == worker_port) {
                 w->file_count++;
+                printf("[MANAGER] Contador actualizado para %s:%d (Total: %d)\n", 
+                       w->ip, w->port, w->file_count);
                 break;
             }
         }
     }
     
-    printf("[MANAGER] Archivo '%s' registrado.\n", filename);
     pthread_mutex_unlock(&self->lock);
 }
 
@@ -157,16 +159,17 @@ void* handle_client(void* arg) {
             }
             
             case CONFIRM_WORKER:
-                // El mensaje viene formato "nombre_archivo|ip_worker"
+                // El mensaje viene formato "nombre_archivo|ip_worker|port_worker"
                 // Usamos strtok para separar (modifica el string in-place)
                 char* nombre_archivo = strtok(paquete.msg, "|");
                 char* ip_worker = strtok(NULL, "|");
-            
-                if (nombre_archivo && ip_worker) {
-                    Manager_AddFileRecord(&global_manager, nombre_archivo, ip_worker);
+                char* port_str = strtok(NULL, "|"); // Extraemos el puerto como string
+                
+                if (nombre_archivo && ip_worker && port_str) {
+                    int port = atoi(port_str);
+                    Manager_AddFileRecord(&global_manager, nombre_archivo, ip_worker, port);
                 } else {
-                    // Fallback por si llega el formato antiguo
-                    Manager_AddFileRecord(&global_manager, paquete.msg, NULL);
+                    printf("[ERROR] Formato de confirmación inválido.\n");
                 }
                 break;
                 
