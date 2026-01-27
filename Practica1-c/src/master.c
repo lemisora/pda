@@ -16,7 +16,6 @@ typedef struct status {
     list_t* files;
 } status_t;
 
-
 void init_master(status_t* master_status, int threshold){
     master_status->threshold = threshold;
     master_status->workers = list_create(4);
@@ -38,7 +37,7 @@ void print_status_master(status_t master_status){
 }
 
 int master(int threshold){
-    // status_t* master_status = (status_t*)malloc(sizeof(status_t));
+    // status_t* master_ip_master, port_master, status = (status_t*)malloc(sizeof(status_t));
     // if(master_status == NULL){
     //     printf("Error al inicializar el maestro\n");
     //     return 1;

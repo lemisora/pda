@@ -1,5 +1,5 @@
 #include "red.h"
-#include "protocolo.h"
+#include "include/protocolo.h"
 #include "almacenamiento.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,13 +124,20 @@ void *ciclo_servidor(void *arg) {
             if (master_global_ptr != NULL) {
                     procesar_solicitud_cliente(s_cliente, master_global_ptr);
             } else {
-                // Lógica de Worker (Modo 0): Crear archivo físico o avisar vecino
-                printf("[WORKER] Me llegó petición para: %s\n", paquete.msg);
-                int cuantos = contar_cosas(ruta);
-                if (cuantos < MAX_ARCHIVOS) {
-                    hacer_archivo(ruta, paquete.msg);                        
-                } else {
-                    avisar_vecino(paquete.msg);
+                if (paquete.accion == WRITE_FILE) {
+                    paquete_t respuesta;
+                    respuesta.accion = WRITE_FILE;
+                    int cuantos = contar_cosas(ruta);
+                    
+                    if (cuantos < MAX_ARCHIVOS) {
+                        hacer_archivo(ruta, paquete.msg);
+                        respuesta.valor = 1; // Si se escribio bien
+                    } else {
+                        printf("Nodo %d: Estoy lleno (%d archivos). Se lo paso al otro...\n", mi_puerto, cuantos);
+                        respuesta.valor = 0;
+                    }
+                    
+                    send(s_cliente, &respuesta, sizeof(paquete), 0);
                 }
             }
         }
@@ -141,4 +148,24 @@ void *ciclo_servidor(void *arg) {
 void arrancar_servidor(char *ruta){
     pthread_t id_hilo;
     pthread_create(&id_hilo, NULL, ciclo_servidor, (void*)ruta);
+}
+
+int enviar_comando(char* ip_destino, int puerto_destino, paquete_t paquete_com) {
+    int soc = socket(AF_INET, SOCK_STREAM, 0);
+        if (soc < 0) return 1;
+    
+    struct sockaddr_in dir_servidor;
+    dir_servidor.sin_family = AF_INET;
+    dir_servidor.sin_port = htons(puerto_destino);
+    inet_pton(AF_INET, ip_destino, &dir_servidor.sin_addr);
+    
+    if (connect(soc, (struct sockaddr *)&dir_servidor, sizeof(dir_servidor)) < 0) {
+        perror("[WORKER] Error al conectar con el destino");
+        close(soc);
+        return 1;
+    }
+    
+    send(soc, &paquete_com, sizeof(paquete_t), 0);
+    close(soc);
+    return 0;
 }
