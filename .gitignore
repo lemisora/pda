@@ -12,3 +12,38 @@ devenv.local.yaml
 
 # pre-commit
 .pre-commit-config.yaml
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.next
+pom.xml.bak
+pom.xml.releaseBackup
+release.properties
+dependency-reduced-pom.xml
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Eclipse
+.classpath
+.project
+.settings/
+.factorypath
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# JVM crash logs
+hs_err_pid*.log
