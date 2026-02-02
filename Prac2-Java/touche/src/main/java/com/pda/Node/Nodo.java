@@ -43,12 +43,15 @@ public class Nodo {
         this.IP = ip;
         this.port = port;
         this.name = name;
-        
+    }
+    
+    // Función general para iniciar el nodo
+    public void start() throws IOException {
         // Iniciar hilos de envio y recepción
         startSender();
         startReceiver();
     }
-     
+    
     // Hilos anónimos lambda
     /** Función para iniciar un hilo que envía peticiones a otros nodos */
     private void startSender() {
@@ -83,6 +86,7 @@ public class Nodo {
                         System.err.println("Cliente no válido: " + clientSocket.getInetAddress().getHostAddress());
                         clientSocket.close();
                     }
+                    // executor.execute(new MessageManager(clientSocket, this));
                 }
             } catch (IOException e) {
                 e.printStackTrace();
