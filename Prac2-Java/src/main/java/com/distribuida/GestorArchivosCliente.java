@@ -1,3 +1,5 @@
+package com.distribuida;
+
 import java.io.*;
 import java.net.*;
 
