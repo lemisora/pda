@@ -13,6 +13,9 @@ devenv.local.yaml
 # pre-commit
 .pre-commit-config.yaml
 
+# Java Class files
+*.class
+
 # Maven
 target/
 pom.xml.tag
