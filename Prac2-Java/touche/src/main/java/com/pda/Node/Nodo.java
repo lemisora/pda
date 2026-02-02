@@ -7,6 +7,8 @@ import java.util.concurrent.*;
 import com.pda.Constants.Net;
 import com.pda.Manager.MessageManager;
 
+import com.pda.Manager.Security.NetFilter;
+
 /**
  * Clase para almacenar los nodos del sistema distribuido
  */
@@ -26,6 +28,9 @@ public class Nodo {
     private String IP;
     private int port;
     private String name;
+    
+    // Con esta variable se puede saber si es el nodo líder
+    private boolean isLeader = false;
     // private boolean running = true;
     
     /**
@@ -69,7 +74,15 @@ public class Nodo {
                 System.out.println("Recibiendo peticiones en '" + Net.listenIP + ":" + this.port + "'");
                 while(true) {
                     Socket clientSocket = serverSocket.accept();
-                    executor.execute(new MessageManager(clientSocket, this));
+                    
+                    // Validar que la IP del cliente sea válida
+                    System.out.println("Validando transmisor de mensaje -> " + clientSocket.getInetAddress().getHostAddress());
+                    if (NetFilter.isTailscaleIP(clientSocket.getInetAddress()) || NetFilter.isLocalhost(clientSocket.getInetAddress())) {
+                        executor.execute(new MessageManager(clientSocket, this));
+                    } else {
+                        System.err.println("Cliente no válido: " + clientSocket.getInetAddress().getHostAddress());
+                        clientSocket.close();
+                    }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -78,12 +91,12 @@ public class Nodo {
     }
      
     /**
-    * Método para enviar llamadas (datos) a otros nodos
+    * Método para enviar llamadas (datos) a otros nodos - los añade a la cola de envios
     * @param destinoHost : IP del destino
     * @param destinoPort : puerto del destino
     * @param mensaje : mensaje a enviar de tipo Mensaje (clase contenedora de datos)
     */
-    public void sendData(String destinoHost, int destinoPort, Mensaje mensaje) {
+    public void addDataToMessageQueue(String destinoHost, int destinoPort, Mensaje mensaje) {
         colaEnvios.offer(new Envio(destinoHost, destinoPort, mensaje));
     }
     
