@@ -25,11 +25,11 @@ public class App {
     public static void main( String[] args ) {
         // processArgs( args );
         Nodo n1 = new Nodo(Net.localhost, 8000, "node1");
-        Nodo n2 = new Nodo(Net.localhost, 8001, "node2");
+        // Nodo n2 = new Nodo(Net.localhost, 8001, "node2");
         
         for (int i = 0; i < 10; i++) {
-            n1.sendData(Net.localhost, 8001, new Mensaje(CommandType.WRITE, "node1",  "Hola mundo - "+i));
-            n2.sendData(Net.localhost, 8000, new Mensaje(CommandType.WRITE, "node2",  "Hola mundo - "+i));
+            n1.addDataToMessageQueue(Net.localhost, 8001, new Mensaje(CommandType.WRITE, "node1",  "Hola mundo - "+i));
+            // n2.addDataToMessageQueue(Net.localhost, 8000, new Mensaje(CommandType.WRITE, "node2",  "Hola mundo - "+i));
         }
     }
 }
