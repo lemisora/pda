@@ -2,9 +2,13 @@ package com.pda.Node;
 
 import java.net.*;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pda.Constants.Net;
+import com.pda.Enums.CommandType;
 import com.pda.Manager.MessageManager;
 
 import com.pda.Manager.Security.NetFilter;
@@ -13,7 +17,7 @@ import com.pda.Manager.Security.NetFilter;
  * Clase para almacenar los nodos del sistema distribuido
  */
 public class Nodo {
-    
+
     /**
      * Record para enviar datos a otros nodos
      * @param destinoHost : IP del destino
@@ -21,49 +25,130 @@ public class Nodo {
      * @param mensaje : mensaje a enviar de tipo Mensaje (clase contenedora de datos)
      */
     public record Envio (String destinoHost, int destinoPort, Mensaje mensaje) {}
-    
+
     private BlockingQueue<Envio> colaEnvios = new LinkedBlockingQueue<Envio>();
     private ExecutorService executor = Executors.newFixedThreadPool(10);
-    
+
+    // Lista de IPs validas (se obtienen desde un archivo)
+    private List<String> ipNodos;
+
+    // Monitor para evitar múltiples elecciones simultáneas
+    private AtomicBoolean electionInProgress = new AtomicBoolean(false);
+
+    // Variables y constantes para el detector de fallos
+    private volatile long lastHeartbeatTime = System.currentTimeMillis();
+    private static final int HEARTBEAT_INTERVAL = 1000; // El líder envía cada 1s
+    private static final int FAILURE_TIMEOUT = 3500;    // Si pasan 3.5s, el líder murió
+
     private String IP;
     private int port;
     private String name;
+    private int id; // Se usará para el algoritmo de bully
     
     // Con esta variable se puede saber si es el nodo líder
     private boolean isLeader = false;
-    // private boolean running = true;
+    // Con este booleano se determina si se puede elegir como candidato a líder o no
+    private boolean candidateFailed = false;
     
     /**
      * Constructor de la clase Node
+     * @param id : Identificador numérico para el nodo
      * @param ip : IP del nodo
-     * @param port : puerto del nodo
-     * @param name : nombre del nodo
+     * @param port : Puerto del nodo
+     * @param name : Nombre del nodo
      */
-    public Nodo(String ip, int port, String name) {
+    public Nodo(int id, String ip, int port, String name) {
+        this.id = id;
         this.IP = ip;
         this.port = port;
         this.name = name;
+
+        // Cargar las IP desde un archivo
+        this.ipNodos = new ArrayList<>();
+        // ToDo: Cargar las IPs válidas del sistema distribuido
     }
-    
+
+    // ============ APARTADO DE SERVICIOS ============
     // Función general para iniciar el nodo
     public void start() throws IOException {
         // Iniciar hilos de envio y recepción
         startSender();
         startReceiver();
+        startDiscover();
+        startFailureDetection();
     }
-    
+
+    /** Función para elección de líder
+     * @param remoteNodeID : ID del nodo remoto*/
+    public void bullyElectionVote(int remoteNodeID) {
+        // En Bully, si alguien con ID mayor me responde, él manda.
+        if (remoteNodeID > this.id) {
+            System.out.println("[ELECCIÓN] El nodo " + remoteNodeID + " es mayor. Me retiro de la elección.");
+            setCandidateFailed(true);
+            setLeader(false);
+        }
+    }
+
+    /** Función para convertirse en líder*/
+    private void becomeLeader(){
+        this.isLeader = true;
+        this.candidateFailed = false; // Reiniciar estado
+        System.out.println("[LIDER] ¡Soy el nuevo líder! (ID: " + this.id + ")");
+
+        // Avisar a los demás
+        broadcast(CommandType.NEW_LEADER, "¡Soy el nuevo Líder!");
+
+        // Iniciar proceso de envío de latidos
+        startLeaderHeartbeat();
+    }
+
+    /** Función para iniciar el proceso de búsqueda de nodos en Red (y encontrar un nuevo líder, si solo hay un nodo entonces el líder es el mismo nodo)*/
+    private void startDiscover(){
+        if (electionInProgress.getAndSet(true)) {
+            System.out.println("[DISCOVER] Elección en proceso.");
+            return;
+        }
+
+        // Se reinicia para que este nodo sea elegible como candidato
+        this.candidateFailed = false;
+
+        new Thread(() -> {
+            System.out.println("[DISCOVER] Buscando otros nodos...");
+
+            broadcast(CommandType.HELLO, "Voten por un líder.");
+
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                e.getMessage();
+            }
+
+            if (!candidateFailed && !isLeader) {
+                becomeLeader();
+            } else {
+                System.out.println("[Nodo " + this.name + "] Me mantengo como seguidor.");
+            }
+
+            // Se libera el monitor
+            electionInProgress.set(false);
+            System.out.println("[DISCOVER] Fin de proceso de elección.");
+
+        }).start();
+    }
+
     // Hilos anónimos lambda
     /** Función para iniciar un hilo que envía peticiones a otros nodos */
     private void startSender() {
         new Thread(() -> {
+            System.out.println("Iniciando hilo de envío de comandos...");
             while(true) {
                 try {
                     Envio envio = colaEnvios.take();
                     System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
                     sendEnvio(envio);
-                    Thread.sleep(1000);
+                    //Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                    //Thread.currentThread().interrupt();
                     break;
                 }
             }
@@ -93,9 +178,56 @@ public class Nodo {
             }
         }).start();
     }
-     
+
+    /** Función que ejecuta el líder para avisar a todos los nodos que sigue activo*/
+    private void startLeaderHeartbeat(){
+        new Thread( () -> {
+            System.out.println("[Heartbeat Service] Iniciando servicio para informar a los otros Nodos de mi funcionamiento.");
+            while (isLeader) {
+                try {
+                    broadcast(CommandType.HEARTBEAT, "Estoy funcionando");
+                    Thread.sleep(HEARTBEAT_INTERVAL);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            System.out.println("[Heartbeat Service] Deteniendo servicio, el líder ha cambiado.");
+        }).start();
+    }
+
+    /** Función que se ejecuta para detectar fallos en la conexión entre los nodos con el Nodo Líder*/
+    private void startFailureDetection(){
+        new Thread (() -> {
+            System.out.println("[Detector Service] Iniciando servicio que vigila el estado actual del líder.");
+            while (true) {
+                try {
+                    Thread.sleep(HEARTBEAT_INTERVAL);
+                    if (isLeader) continue;
+                    long deltaHeartbeatTime = System.currentTimeMillis() - lastHeartbeatTime;
+
+                    if (deltaHeartbeatTime > FAILURE_TIMEOUT) {
+                        System.err.println("[Detector Service] El líder no responde desde hace "+ deltaHeartbeatTime + " ms.");
+                        System.out.println("[Detector Service] Iniciando una nueva elección de líder.");
+
+                        // Se actualiza la última vez que se hizo un heartbeat para que no haya un bucle
+                        lastHeartbeatTime = System.currentTimeMillis();
+                        startDiscover();
+                    }
+                } catch (Exception e) {
+                    break;
+                }
+            }
+        }).start();
+    }
+
+    /**Función para actualizar el tiempo en el que se mandó el último latido por parte del nodo Líder */
+    public void updateLastHeartbeat(){
+        this.lastHeartbeatTime = System.currentTimeMillis();
+    }
+
     /**
-    * Método para enviar llamadas (datos) a otros nodos - los añade a la cola de envios
+    * Función para enviar llamadas (datos) a otros nodos - los añade a la cola de envíos
     * @param destinoHost : IP del destino
     * @param destinoPort : puerto del destino
     * @param mensaje : mensaje a enviar de tipo Mensaje (clase contenedora de datos)
@@ -112,17 +244,39 @@ public class Nodo {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             
             out.writeObject(envio.mensaje());
-            System.out.println("[SENDER - " + this.name + "] Enviando a " + envio.destinoHost() + ":" + envio.destinoPort());
+            //System.out.println("[SENDER - " + this.name + "] Enviando a " + envio.destinoHost() + ":" + envio.destinoPort());
             out.close();
         } catch (IOException e) {
-            System.err.println("[SENDER - " + this.name + "] Falló envío a "+envio.destinoHost());
+            //System.err.println("[SENDER - " + this.name + "] Falló envío a "+envio.destinoHost());
         }
     }
-      
+
+
+    private void broadcast(CommandType type, String data){
+        // ToDo: Cambiar para usar las IPs dentro de this.ipNodos
+        int[] puertosPrueba = {8000, 8001, 8002, 8003};
+
+        for (int p : puertosPrueba) {
+            if (p == this.port) continue; // No enviarme a mí mismo
+
+            // Construimos el mensaje CON MI IP Y PUERTO de retorno
+            Mensaje msj = new Mensaje(type, this.id, this.name, this.IP, this.port, data);
+            addDataToMessageQueue(Net.localhost, p, msj);
+        }
+    }
+
     // =================================================================================
     // Getters y Setters
     // =================================================================================
     public String getIP() { return IP; }
+
+    public int getId() { return id; }
+
+    public boolean isLeader() { return isLeader; }
+
+    public void setLeader(boolean leader) { isLeader = leader; }
+
+    public void setCandidateFailed(boolean candidateFailed) { this.candidateFailed = candidateFailed; }
 
     public void setIP(String iP) { IP = iP; }
 
