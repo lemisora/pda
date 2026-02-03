@@ -13,14 +13,17 @@ import picocli.CommandLine.Option;
          description = "Iniciar un nodo para un sistema distribuido simple.")
 
 public class App implements Runnable {
-    @Option(names = {"-i", "--ip"}, description = "IP del Nodo")
+    @Option(names = {"-I", "--IP"}, description = "IP del Nodo")
     private String ip =  Net.localhost;
     
     @Option(names = {"-p", "--port"}, description = "Puerto del Nodo")
     private int port = Net.listenPort;
-    
+
+    @Option(names = {"-i", "--id"}, description = "ID del Nodo, por defecto es 1.")
+    private int id = 1;
+
     @Option(names = {"-n", "--name"}, description = "Nombre del Nodo")
-    private String nombre = "nodo-n";
+    private String nombre = "nodo-";
     
     @Override
     public void run() {
@@ -29,17 +32,17 @@ public class App implements Runnable {
         // ));
         // System.out.println("Valores de los argumentos recibidos: IP= " + ip + " | Puerto= " + port + " | Nombre= " + nombre);
         
-        Nodo n1 = new Nodo(ip, port, nombre);
-        Nodo n2 = new Nodo(ip, port+1, "node2");
+        Nodo n1 = new Nodo(id, ip, port, nombre);
+        // Nodo n2 = new Nodo(ip, port+1, "node2");
         
         try {
             n1.start();
-            n2.start();
+            // n2.start();
             
-            for (int i = 0; i < 10; i++) {
-                n1.addDataToMessageQueue(ip, n2.getPort(), new Mensaje(CommandType.WRITE, nombre,  "Hola mundo - "+i));
-                n2.addDataToMessageQueue(ip, n1.getPort(), new Mensaje(CommandType.WRITE, "node2",  "Hola mundo - "+i));
-            }
+//            for (int i = 0; i < 10; i++) {
+//                n1.addDataToMessageQueue(ip, n2.getPort(), new Mensaje(CommandType.WRITE, nombre,  "Hola mundo - "+i));
+//                n2.addDataToMessageQueue(ip, n1.getPort(), new Mensaje(CommandType.WRITE, "node2",  "Hola mundo - "+i));
+//            }
             
             System.out.println("Nodo iniciado. Presiona Ctrl+C para salir.");
             Thread.currentThread().join();
