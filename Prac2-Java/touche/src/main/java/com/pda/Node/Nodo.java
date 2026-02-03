@@ -1,6 +1,10 @@
 package com.pda.Node;
 
 import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,10 +68,46 @@ public class Nodo {
         this.name = name;
 
         // Cargar las IP desde un archivo
-        this.ipNodos = new ArrayList<>();
+        // this.ipNodos = new ArrayList<>();
         // ToDo: Cargar las IPs válidas del sistema distribuido
+        loadIPsFromFile("ips.txt");
     }
 
+    private void loadIPsFromFile(String filePath) {
+        this.ipNodos = new ArrayList<>();
+        System.out.println("Cargando nodos desde " + filePath);
+        try {
+            Path path = Paths.get(filePath);
+                    
+            // Verificamos si existe
+            if (!Files.exists(path)) {
+                System.err.println("⚠️ No se encontró 'ips.txt'. Creando archivo vacío de ejemplo...");
+                Files.writeString(path, "# Agrega aquí las IPs de tus nodos (ej: 100.x.y.z)\n");
+                return;
+            }
+        
+            // Leer todas las líneas
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        
+            for (String line : lines) {
+                // Limpiar espacios y comentarios
+                String entry = line.split("#")[0].trim();
+                        
+                if (!entry.isEmpty()) {
+                    this.ipNodos.add(entry);
+                    System.out.println("   -> Nodo agregado: " + entry);
+                }
+            }
+                    
+            if (this.ipNodos.isEmpty()) {
+                System.out.println("La lista de nodos está vacía. Este nodo está solo.");
+            }
+        
+        } catch (IOException e) {
+            System.err.println("Error leyendo configuración de red: " + e.getMessage());
+        }
+    }
+    
     // ============ APARTADO DE SERVICIOS ============
     // Función general para iniciar el nodo
     public void start() throws IOException {
@@ -252,16 +292,34 @@ public class Nodo {
     }
 
 
-    private void broadcast(CommandType type, String data){
-        // ToDo: Cambiar para usar las IPs dentro de this.ipNodos
-        int[] puertosPrueba = {8000, 8001, 8002, 8003};
-
-        for (int p : puertosPrueba) {
-            if (p == this.port) continue; // No enviarme a mí mismo
-
+    private void broadcast(CommandType type, String data) {
+        // Usamos la lista cargada desde el archivo
+        for (String targetNode : this.ipNodos) {
+                
+            String targetHost;
+            int targetPort;
+    
+            // Lógica para soportar formato IP:PUERTO o solo IP
+            if (targetNode.contains(":")) {
+                String[] parts = targetNode.split(":");
+                targetHost = parts[0];
+                targetPort = Integer.parseInt(parts[1]);
+            } else {
+                targetHost = targetNode;
+                // Si no especifican puerto en el txt, asumimos que usan el mismo puerto que yo
+                // (Arquitectura simétrica típica en Tailscale/Prod)
+                targetPort = this.port; 
+            }
+    
+            // Evitar enviarme a mí mismo
+            // Verificamos IP y Puerto por si estamos en localhost probando puertos distintos
+            if (targetHost.equals(this.IP) && targetPort == this.port) {
+                continue; 
+            }
+    
             // Construimos el mensaje CON MI IP Y PUERTO de retorno
             Mensaje msj = new Mensaje(type, this.id, this.name, this.IP, this.port, data);
-            addDataToMessageQueue(Net.localhost, p, msj);
+            addDataToMessageQueue(targetHost, targetPort, msj);
         }
     }
 
