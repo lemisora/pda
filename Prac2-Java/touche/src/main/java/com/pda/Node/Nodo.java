@@ -81,7 +81,7 @@ public class Nodo {
                     
             // Verificamos si existe
             if (!Files.exists(path)) {
-                System.err.println("⚠️ No se encontró 'ips.txt'. Creando archivo vacío de ejemplo...");
+                System.err.println("No se encontró 'ips.txt'. Creando archivo vacío de ejemplo...");
                 Files.writeString(path, "# Agrega aquí las IPs de tus nodos (ej: 100.x.y.z)\n");
                 return;
             }
@@ -184,9 +184,8 @@ public class Nodo {
             while(true) {
                 try {
                     Envio envio = colaEnvios.take();
-                    System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
                     sendEnvio(envio);
-                    //Thread.sleep(1000);
+                    Thread.sleep(1500);
                 } catch (InterruptedException e) {
                     //Thread.currentThread().interrupt();
                     break;
@@ -204,7 +203,7 @@ public class Nodo {
                     Socket clientSocket = serverSocket.accept();
                     
                     // Validar que la IP del cliente sea válida
-                    System.out.println("Validando transmisor de mensaje -> " + clientSocket.getInetAddress().getHostAddress());
+                    // System.out.println("Validando transmisor de mensaje -> " + clientSocket.getInetAddress().getHostAddress());
                     if (NetFilter.isTailscaleIP(clientSocket.getInetAddress()) || NetFilter.isLocalhost(clientSocket.getInetAddress())) {
                         executor.execute(new MessageManager(clientSocket, this));
                     } else {
@@ -282,7 +281,7 @@ public class Nodo {
     private void sendEnvio(Envio envio){
         try (Socket socket = new Socket(envio.destinoHost(), envio.destinoPort())) {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            
+            System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
             out.writeObject(envio.mensaje());
             //System.out.println("[SENDER - " + this.name + "] Enviando a " + envio.destinoHost() + ":" + envio.destinoPort());
             out.close();
