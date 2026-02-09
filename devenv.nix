@@ -23,6 +23,14 @@
     readline.dev
     ncurses.dev
     
+    # Dependencias para usar RPC
+    rpcbind
+    rpcsvc-proto
+    
+    # Dependencias para usar XML-RPC
+    xmlrpc_c
+    libxml2
+    
     # Dependencias para desarrollo con Java
     # Si se debe usar paquetes que estén en Nixpkgs, se añaden acá
     # sino usar los de Maven con el pom.xml
