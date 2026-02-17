@@ -1,0 +1,1 @@
+# Agrega aquí las IPs de tus nodos (ej: 100.x.y.z)
