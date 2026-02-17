@@ -1,7 +1,11 @@
 package com.pda.Manager;
 
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 import com.pda.Node.Nodo;
 import com.pda.Node.Mensaje;
@@ -78,6 +82,146 @@ public class MessageManager implements Runnable {
 
                 nodo.updateLastHeartbeat();
             }
+            case STORE_REQUEST -> handleStoreRequest(mensaje);
+            case STORE_ASSIGNED -> handleStoreAssigned(mensaje);
+            case STORE_CONFIRMED -> handleStoreConfirmed(mensaje);
+            case REPLICATE_FILE -> handleReplicateFile(mensaje);
+            case REPLICA_CONFIRMED -> handleReplicaConfirmed(mensaje);
+            case NODE_STATUS_UPDATE -> handleNodeStatusUpdate(mensaje);
+            case LIST_REQUEST -> handleListRequest(mensaje);
+            case LIST_RESPONSE -> handleListResponse(mensaje);
         }
+    }
+
+    // === HANDLERS PARA STORAGE ===
+
+    private void handleStoreRequest(Mensaje mensaje) {
+        // Solo el líder procesa esto
+        if (!nodo.isLeader()) return;
+
+        String fileName = mensaje.getData();
+        System.out.println("[Líder] Recibida petición para guardar: " + fileName);
+
+        // TODO: Encontrar nodo con espacio y asignar
+        // Por ahora respuesta simple
+        assignFileToNode(fileName, mensaje.getSenderHost(), mensaje.getSenderPort());
+    }
+
+    private void assignFileToNode(String fileName, String requesterIP, int requesterPort) {
+        // Aquí implementarías la lógica para encontrar el mejor nodo
+        // Por ahora, simulamos asignando al mismo nodo que pidió
+
+        Mensaje assignment = new Mensaje(
+                CommandType.STORE_ASSIGNED,
+                nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
+                fileName
+        );
+
+        nodo.addDataToMessageQueue(requesterIP, requesterPort, assignment);
+    }
+
+    private void handleStoreAssigned(Mensaje mensaje) {
+        String fileName = mensaje.getData();
+        System.out.println("[Storage] Líder me asignó guardar: " + fileName);
+
+        // Guardar el archivo
+        try {
+            Path sourcePath = nodo.getStorageManager().getEntradaDir().resolve(fileName);
+            if (nodo.getStorageManager().storeFile(fileName, false)) {
+                Files.delete(sourcePath);
+
+                // Confirmar al líder
+                Mensaje confirmacion = new Mensaje(
+                        CommandType.STORE_CONFIRMED,
+                        nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
+                        fileName
+                );
+                nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), confirmacion);
+            }
+        } catch (IOException e) {
+            System.err.println("Error guardando archivo: " + e.getMessage());
+        }
+    }
+
+    private void handleStoreConfirmed(Mensaje mensaje) {
+        if (!nodo.isLeader()) return;
+
+        String fileName = mensaje.getData();
+        System.out.println("[Líder] Confirmado almacenamiento de: " + fileName);
+
+        // Registrar en catálogo global
+        nodo.getStorageManager().registerFileInCatalog(fileName, mensaje.getSenderHost());
+    }
+
+    private void handleReplicateFile(Mensaje mensaje) {
+        String fileName = mensaje.getData();
+
+        // Solo replicar si tengo espacio y NO soy el nodo origen
+        if (nodo.getStorageManager().canStoreFile() &&
+                !mensaje.getSenderHost().equals(nodo.getIP())) {
+
+            try {
+                if (nodo.getStorageManager().storeFile(fileName, true)) {
+                    System.out.println("[Replication] Réplica creada para: " + fileName);
+
+                    // Confirmar réplica
+                    Mensaje confirmacion = new Mensaje(
+                            CommandType.REPLICA_CONFIRMED,
+                            nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
+                            fileName
+                    );
+                    nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), confirmacion);
+                }
+            } catch (IOException e) {
+                System.err.println("Error creando réplica: " + e.getMessage());
+            }
+        }
+    }
+
+    private void handleReplicaConfirmed(Mensaje mensaje) {
+        String fileName = mensaje.getData();
+        System.out.println("[Replication] Confirmada réplica de '" + fileName + "' en " + mensaje.getSenderHost());
+
+        // Si soy líder, actualizar catálogo
+        if (nodo.isLeader()) {
+            nodo.getStorageManager().registerFileInCatalog(fileName, mensaje.getSenderHost());
+        }
+    }
+
+    private void handleNodeStatusUpdate(Mensaje mensaje) {
+        if (!nodo.isLeader()) return;
+
+        String statusData = mensaje.getData(); // Formato: "3/5"
+        System.out.println("[Líder] Estado actualizado de " + mensaje.getSenderName() + ": " + statusData);
+
+        // TODO: Guardar en un Map<String, NodeStatus> para tener estado de todos los nodos
+    }
+
+    private void handleListRequest(Mensaje mensaje) {
+        List<String> files;
+
+        if (nodo.isLeader()) {
+            // Líder responde con catálogo global
+            files = nodo.getStorageManager().listAllFiles();
+        } else {
+            // Nodo normal responde con sus archivos locales
+            files = nodo.getStorageManager().listLocalFiles();
+        }
+
+        String fileList = String.join(", ", files);
+
+        Mensaje response = new Mensaje(
+                CommandType.LIST_RESPONSE,
+                nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
+                fileList
+        );
+
+        nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), response);
+    }
+
+    private void handleListResponse(Mensaje mensaje) {
+        System.out.println("\n=== ARCHIVOS DISPONIBLES ===");
+        System.out.println(mensaje.getData());
+        System.out.println("============================\n");
     }
 }
