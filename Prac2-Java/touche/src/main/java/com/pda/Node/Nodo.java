@@ -52,6 +52,7 @@ public class Nodo {
     private String name;
     private int id; // Se usará para el algoritmo de bully
     private StorageManager storageManager;  // Gestor de almacenamiento para el nodo
+    private String leaderNodeKey = null; // Clave del nodo líder (IP:PUERTO)
 
     // Threshold constante (por ahora)
     private static final int DEFAULT_THRESHOLD = 5;
@@ -153,6 +154,8 @@ public class Nodo {
     private void becomeLeader() {
         this.isLeader = true;
         this.candidateFailed = false; // Reiniciar estado
+        this.leaderNodeKey = getNodeKey(); // Actualizar clave del líder (este mismo nodo)
+        
         System.out.println("[LIDER] ¡Soy el nuevo líder! (ID: " + this.id + ")");
 
         // Avisar a los demás
@@ -179,11 +182,11 @@ public class Nodo {
 
             broadcast(CommandType.HELLO, "Voten por un líder.");
 
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.getMessage();
-            }
+            // try {
+            //     Thread.sleep(3000);
+            // } catch (InterruptedException e) {
+            //     e.getMessage();
+            // }
 
             if (!candidateFailed && !isLeader) {
                 becomeLeader();
@@ -210,7 +213,7 @@ public class Nodo {
                 try {
                     Envio envio = colaEnvios.take();
                     sendEnvio(envio);
-                    Thread.sleep(1500);
+                    // Thread.sleep(1500);
                 } catch (InterruptedException e) {
                     //Thread.currentThread().interrupt();
                     break;
@@ -421,6 +424,8 @@ public class Nodo {
 
 
     private void broadcast(CommandType type, String data) {
+        // System.out.println("[BROADCAST] Enviando " + type + " a " + ipNodos.size() + " nodos");
+
         // Usamos la lista cargada desde el archivo
         for (String targetNode : this.ipNodos) {
                 
@@ -439,9 +444,12 @@ public class Nodo {
                 targetPort = this.port; 
             }
     
+            // System.out.println("[BROADCAST] Enviando a: " + targetHost + ":" + targetPort);
+            
             // Evitar enviarme a mí mismo
             // Verificamos IP y Puerto por si estamos en localhost probando puertos distintos
             if (targetHost.equals(this.IP) && targetPort == this.port) {
+                // System.out.println("[BROADCAST] Saltando auto-envío");
                 continue; 
             }
     
@@ -473,4 +481,13 @@ public class Nodo {
     public void setName(String name) { this.name = name; }
 
     public StorageManager getStorageManager() { return storageManager; }
+    
+    public String getNodeKey() { return this.IP + ":" + this.port; }
+    
+    public String getLeaderNodeKey() { return leaderNodeKey; }
+    
+    public void setLeaderNodeKey(String leaderNodeKey) { 
+        this.leaderNodeKey = leaderNodeKey; 
+        System.out.println("[INFO] Líder actualizado a: " + leaderNodeKey);
+    }
 }

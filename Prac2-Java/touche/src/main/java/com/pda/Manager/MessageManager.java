@@ -14,37 +14,39 @@ import com.pda.Enums.CommandType;
 public class MessageManager implements Runnable {
     private Socket socket;
     private final Nodo nodo;
-    
+
     /**
      * Constructor de la clase MessageManager
+     * 
      * @param socket : socket de conexión con el cliente
-     * @param nodo : nodo al que corresponde este gestor de mensajes
+     * @param nodo   : nodo al que corresponde este gestor de mensajes
      */
     public MessageManager(Socket socket, Nodo nodo) {
         this.socket = socket;
         this.nodo = nodo;
     }
-    
+
     @Override
     public void run() {
         try (
-            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-        ) {
+                ObjectInputStream in = new ObjectInputStream(socket.getInputStream());) {
             // Deserializar mensaje recibido
             Mensaje mensaje = (Mensaje) in.readObject();
-            
+
             // Procesar mensaje
             procesarMensaje(mensaje);
-            
+
         } catch (Exception e) {
             System.err.println("Error al procesar el mensaje: " + e.getMessage());
         }
     }
-    
-    /** 
-     * Función para procesar el contenido del mensaje recibido 
-     * @param mensaje : mensaje recibido de tipo Mensaje (clase contenedora de datos)
-    */
+
+    /**
+     * Función para procesar el contenido del mensaje recibido
+     * 
+     * @param mensaje : mensaje recibido de tipo Mensaje (clase contenedora de
+     *                datos)
+     */
     public void procesarMensaje(Mensaje mensaje) {
         System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
         switch (mensaje.getCommand()) {
@@ -52,7 +54,8 @@ public class MessageManager implements Runnable {
             case HELLO -> {
                 // Si MI id es MAYOR que el del remitente, le respondo "ALIVE" (para callarlo)
                 if (nodo.getId() > mensaje.getSenderId()) {
-                    System.out.println("Recibí HELLO de " + mensaje.getSenderId() + ". Soy mayor (" + nodo.getId() + "), le respondo ALIVE.");
+                    System.out.println("Recibí HELLO de " + mensaje.getSenderId() + ". Soy mayor (" + nodo.getId()
+                            + "), le respondo ALIVE.");
 
                     Mensaje respuesta = new Mensaje(
                             CommandType.ALIVE,
@@ -60,8 +63,7 @@ public class MessageManager implements Runnable {
                             nodo.getName(),
                             nodo.getIP(),
                             nodo.getPort(),
-                            "Detener elección, soy mayor. Nodo: " + nodo.getName() + "| id : " + nodo.getId()
-                    );
+                            "Detener elección, soy mayor. Nodo: " + nodo.getName() + "| id : " + nodo.getId());
 
                     // Respondemos directamente al host y puerto que venía en el mensaje
                     nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), respuesta);
@@ -72,14 +74,16 @@ public class MessageManager implements Runnable {
                 nodo.bullyElectionVote(mensaje.getSenderId());
                 // En caso de seguir siendo líder por errores de red renunciar acá
                 if (nodo.isLeader() && mensaje.getSenderId() > nodo.getId()) {
-                    System.out.println("[CORRECCIÓN - Nodo (" + nodo.getName() + ")] Recibí ALIVE tardío de un mayor. Dejo de ser líder.");
+                    System.out.println("[CORRECCIÓN - Nodo (" + nodo.getName()
+                            + ")] Recibí ALIVE tardío de un mayor. Dejo de ser líder.");
                     nodo.setLeader(false);
                 }
             }
             case HEARTBEAT -> {
 
                 if (nodo.isLeader() && mensaje.getSenderId() > nodo.getId()) {
-                    System.out.println("[Error - Nodo ( " + nodo.getName() + " ] Detecté un líder con mayor ID: " + "( "+ mensaje.getSenderId() + "). Renunciando a puesto líder.");
+                    System.err.println("[Nodo ( " + nodo.getName() + ") ] Detecté un líder con mayor ID: " + "( "
+                            + mensaje.getSenderId() + "). Renunciando a puesto líder.");
                     nodo.setLeader(false);
                     nodo.setCandidateFailed(false);
                     break;
@@ -87,12 +91,20 @@ public class MessageManager implements Runnable {
                 nodo.updateLastHeartbeat();
             }
             case NEW_LEADER -> {
+                // NO procesar mi propio mensaje
+                String senderKey = mensaje.getSenderHost() + ":" + mensaje.getSenderPort();
+                if (senderKey.equals(nodo.getNodeKey())) {
+                    return; // Ignorar silenciosamente
+                }
                 // Hay un nuevo líder oficial. Actualizo mi estado.
-                System.out.println("Nuevo Líder reconocido: " + mensaje.getSenderName() + " (ID: " + mensaje.getSenderId() + ")");
+                System.out.println(
+                        "Nuevo Líder reconocido: " + mensaje.getSenderName() + " (ID: " + mensaje.getSenderId() + ")");
                 nodo.setLeader(false);
                 nodo.setCandidateFailed(true); // Ya no intento ser líder
 
                 nodo.updateLastHeartbeat();
+                
+                nodo.setLeaderNodeKey(senderKey);
             }
             case STORE_REQUEST -> handleStoreRequest(mensaje);
             case STORE_ASSIGNED -> handleStoreAssigned(mensaje);
@@ -109,7 +121,8 @@ public class MessageManager implements Runnable {
 
     private void handleStoreRequest(Mensaje mensaje) {
         // Solo el líder procesa esto
-        if (!nodo.isLeader()) return;
+        if (!nodo.isLeader())
+            return;
 
         String fileName = mensaje.getData();
         System.out.println("[Líder] Recibida petición para guardar: " + fileName);
@@ -126,8 +139,7 @@ public class MessageManager implements Runnable {
         Mensaje assignment = new Mensaje(
                 CommandType.STORE_ASSIGNED,
                 nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
-                fileName
-        );
+                fileName);
 
         nodo.addDataToMessageQueue(requesterIP, requesterPort, assignment);
     }
@@ -146,8 +158,7 @@ public class MessageManager implements Runnable {
                 Mensaje confirmacion = new Mensaje(
                         CommandType.STORE_CONFIRMED,
                         nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
-                        fileName
-                );
+                        fileName);
                 nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), confirmacion);
             }
         } catch (IOException e) {
@@ -156,7 +167,8 @@ public class MessageManager implements Runnable {
     }
 
     private void handleStoreConfirmed(Mensaje mensaje) {
-        if (!nodo.isLeader()) return;
+        if (!nodo.isLeader())
+            return;
 
         String fileName = mensaje.getData();
         System.out.println("[Líder] Confirmado almacenamiento de: " + fileName);
@@ -180,8 +192,7 @@ public class MessageManager implements Runnable {
                     Mensaje confirmacion = new Mensaje(
                             CommandType.REPLICA_CONFIRMED,
                             nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
-                            fileName
-                    );
+                            fileName);
                     nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), confirmacion);
                 }
             } catch (IOException e) {
@@ -201,12 +212,14 @@ public class MessageManager implements Runnable {
     }
 
     private void handleNodeStatusUpdate(Mensaje mensaje) {
-        if (!nodo.isLeader()) return;
+        if (!nodo.isLeader())
+            return;
 
         String statusData = mensaje.getData(); // Formato: "3/5"
         System.out.println("[Líder] Estado actualizado de " + mensaje.getSenderName() + ": " + statusData);
 
-        // TODO: Guardar en un Map<String, NodeStatus> para tener estado de todos los nodos
+        // TODO: Guardar en un Map<String, NodeStatus> para tener estado de todos los
+        // nodos
     }
 
     private void handleListRequest(Mensaje mensaje) {
@@ -225,8 +238,7 @@ public class MessageManager implements Runnable {
         Mensaje response = new Mensaje(
                 CommandType.LIST_RESPONSE,
                 nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
-                fileList
-        );
+                fileList);
 
         nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), response);
     }
