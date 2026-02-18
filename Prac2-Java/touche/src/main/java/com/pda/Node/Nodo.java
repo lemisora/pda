@@ -413,7 +413,7 @@ public class Nodo {
     private void sendEnvio(Envio envio){
         try (Socket socket = new Socket(envio.destinoHost(), envio.destinoPort())) {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
+            // System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
             out.writeObject(envio.mensaje());
             //System.out.println("[SENDER - " + this.name + "] Enviando a " + envio.destinoHost() + ":" + envio.destinoPort());
             out.close();
