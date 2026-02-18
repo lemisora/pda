@@ -10,6 +10,7 @@ public enum CommandType {
     WRITE,                  // Orden para escribir en el almacenamiento de un nodo
     STORE_REQUEST,          // Nodo pide al líder guardar archivo
     STORE_ASSIGNED,         // Líder asigna dónde guardar
+    STORE_REJECTED,         // Nodo rechaza guardar archivo
     STORE_CONFIRMED,        // Nodo confirma que guardó el archivo
     REPLICATE_FILE,         // Orden para replicar en otro nodo
     REPLICA_CONFIRMED,      // Confirmación de réplica exitosa

@@ -141,4 +141,26 @@ public class StorageManager {
     public Path getEntradaDir() {
         return entradaDir;
     }
+    
+    public boolean fileExistsInCatalog(String fileName) {
+        return globalCatalog.containsKey(fileName);
+    }
+    
+    public void updateNodeStatus(String nodeKey, NodeStatus status) {
+        // Por ahora solo log, después implementaremos el Map
+        System.out.println("[Estado Nodos] Actualizado " + nodeKey + ": " + 
+                           status.currentFiles() + "/" + status.threshold());
+    }
+    
+    public String findBestNodeForStorage() {
+        // Por ahora retorna null - mejoraremos esto después
+        // Cuando implementes el Map de estados, aquí buscarás el nodo con más espacio
+        System.out.println("[Líder] Buscando mejor nodo... (por implementar)");
+        return null;
+    }
+    
+    public void moveToRejected(String fileName) throws IOException {
+        // Por ahora solo log - implementaremos después
+        System.out.println("[StorageManager] Archivo rechazado: " + fileName);
+    }
 }

@@ -17,7 +17,7 @@ public class MessageManager implements Runnable {
 
     /**
      * Constructor de la clase MessageManager
-     * 
+     *
      * @param socket : socket de conexión con el cliente
      * @param nodo   : nodo al que corresponde este gestor de mensajes
      */
@@ -43,13 +43,14 @@ public class MessageManager implements Runnable {
 
     /**
      * Función para procesar el contenido del mensaje recibido
-     * 
+     *
      * @param mensaje : mensaje recibido de tipo Mensaje (clase contenedora de
      *                datos)
      */
     public void procesarMensaje(Mensaje mensaje) {
-        
-        if (mensaje.getCommand() != CommandType.HEARTBEAT) System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
+
+        if (mensaje.getCommand() != CommandType.HEARTBEAT)
+            System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
         switch (mensaje.getCommand()) {
             // En este caso se ha iniciado una elección
             case HELLO -> {
@@ -104,12 +105,13 @@ public class MessageManager implements Runnable {
                 nodo.setCandidateFailed(true); // Ya no intento ser líder
 
                 nodo.updateLastHeartbeat();
-                
+
                 nodo.setLeaderNodeKey(senderKey);
             }
             case STORE_REQUEST -> handleStoreRequest(mensaje);
             case STORE_ASSIGNED -> handleStoreAssigned(mensaje);
             case STORE_CONFIRMED -> handleStoreConfirmed(mensaje);
+            case STORE_REJECTED -> handleStoreRejected(mensaje);
             case REPLICATE_FILE -> handleReplicateFile(mensaje);
             case REPLICA_CONFIRMED -> handleReplicaConfirmed(mensaje);
             case NODE_STATUS_UPDATE -> handleNodeStatusUpdate(mensaje);
@@ -134,26 +136,47 @@ public class MessageManager implements Runnable {
     }
 
     private void assignFileToNode(String fileName, String requesterIP, int requesterPort) {
-        // Aquí implementarías la lógica para encontrar el mejor nodo
-        // Por ahora, simulamos asignando al mismo nodo que pidió
+        // Verificar si el nodo ya tiene el archivo asignado
+        if (nodo.getStorageManager().fileExistsInCatalog(fileName)) {
+            System.out.println("[Líder] Archivo duplicado rechazado: " + fileName);
+
+            Mensaje rejection = new Mensaje(
+                    CommandType.STORE_REJECTED,
+                    nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
+                    fileName);
+            nodo.addDataToMessageQueue(requesterIP, requesterPort, rejection);
+            return;
+        }
+        // Encontrar mejor nodo (por ahora, asignar al que pidió si tiene espacio)
+        // TODO: Mejorar para buscar realmente el mejor nodo
+        String targetIP = requesterIP;
+        int targetPort = requesterPort;
 
         Mensaje assignment = new Mensaje(
                 CommandType.STORE_ASSIGNED,
                 nodo.getId(), nodo.getName(), nodo.getIP(), nodo.getPort(),
                 fileName);
 
-        nodo.addDataToMessageQueue(requesterIP, requesterPort, assignment);
+        nodo.addDataToMessageQueue(targetIP, targetPort, assignment);
     }
 
     private void handleStoreAssigned(Mensaje mensaje) {
         String fileName = mensaje.getData();
         System.out.println("[Storage] Líder me asignó guardar: " + fileName);
 
-        // Guardar el archivo
+        // Guardar archivo
         try {
+            // Buscar en archivos_entrada O en archivos_pendientes
             Path sourcePath = nodo.getStorageManager().getEntradaDir().resolve(fileName);
+
             if (nodo.getStorageManager().storeFile(fileName, false)) {
-                Files.delete(sourcePath);
+                // Solo borrar si existe
+                if (Files.exists(sourcePath)) {
+                    Files.delete(sourcePath);
+                }
+
+                // Limpiar del Set
+                nodo.removeFileFromProcess(fileName);
 
                 // Confirmar al líder
                 Mensaje confirmacion = new Mensaje(
@@ -164,6 +187,7 @@ public class MessageManager implements Runnable {
             }
         } catch (IOException e) {
             System.err.println("Error guardando archivo: " + e.getMessage());
+            nodo.removeFileFromProcess(fileName); // Limpiar si falla
         }
     }
 
@@ -176,6 +200,20 @@ public class MessageManager implements Runnable {
 
         // Registrar en catálogo global
         nodo.getStorageManager().registerFileInCatalog(fileName, mensaje.getSenderHost());
+    }
+
+    private void handleStoreRejected(Mensaje mensaje) {
+        String fileName = mensaje.getData();
+        System.out.println("[Storage] Archivo rechazado por duplicado: " + fileName);
+
+        try {
+            nodo.getStorageManager().moveToRejected(fileName);
+
+            // Limpiar del Set de archivos en proceso
+            nodo.removeFileFromProcess(fileName);
+        } catch (IOException e) {
+            System.err.println("Error moviendo archivo rechazado: " + e.getMessage());
+        }
     }
 
     private void handleReplicateFile(Mensaje mensaje) {

@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -41,6 +42,8 @@ public class Nodo {
 
     // Monitor para evitar múltiples elecciones simultáneas
     private AtomicBoolean electionInProgress = new AtomicBoolean(false);
+    // Monitor para evitar procesar archivos de manera repetida
+    private Set<String> filesBeingProcessed = ConcurrentHashMap.newKeySet();
 
     // Variables y constantes para el detector de fallos
     private volatile long lastHeartbeatTime = System.currentTimeMillis();
@@ -253,7 +256,8 @@ public class Nodo {
      */
     private void startLeaderHeartbeat() {
         new Thread(() -> {
-            System.out.println("[Heartbeat Service] Iniciando servicio para informar a los otros Nodos de mi funcionamiento.");
+            System.out.println(
+                    "[Heartbeat Service] Iniciando servicio para informar a los otros Nodos de mi funcionamiento.");
             while (isLeader) {
                 try {
                     broadcast(CommandType.HEARTBEAT, "Estoy funcionando");
@@ -268,7 +272,8 @@ public class Nodo {
     }
 
     /**
-     * Función que se ejecuta para detectar fallos en la conexión entre los nodos con el Nodo Líder
+     * Función que se ejecuta para detectar fallos en la conexión entre los nodos
+     * con el Nodo Líder
      */
     private void startFailureDetection() {
         new Thread(() -> {
@@ -319,7 +324,14 @@ public class Nodo {
             stream.filter(Files::isRegularFile)
                     .forEach(filePath -> {
                         String fileName = filePath.getFileName().toString();
+
+                        // Evitar procesar el mismo archivo múltiples veces
+                        if (filesBeingProcessed.contains(fileName)) {
+                            return; // Ya está siendo procesado
+                        }
+                        
                         System.out.println("[FileWatcher] Nuevo archivo detectado: " + fileName);
+                        filesBeingProcessed.add(fileName);
 
                         // Intentar guardar localmente
                         try {
@@ -330,6 +342,7 @@ public class Nodo {
                             }
                         } catch (Exception e) {
                             System.err.println("Error procesando " + fileName + ": " + e.getMessage());
+                            filesBeingProcessed.remove(fileName);   // Quitar si falla
                         }
                     });
         }
@@ -342,6 +355,9 @@ public class Nodo {
             // Eliminar de entrada
             Files.delete(sourcePath);
 
+            // Quitar si guarda localmente
+            filesBeingProcessed.remove(fileName);
+            
             // Reportar al líder
             reportStatusToLeader();
 
@@ -422,7 +438,6 @@ public class Nodo {
         }
     }
 
-
     private void broadcast(CommandType type, String data) {
         // System.out.println("[BROADCAST] Enviando " + type + " a " + ipNodos.size() + " nodos");
 
@@ -431,7 +446,7 @@ public class Nodo {
                 
             String targetHost;
             int targetPort;
-    
+
             // Lógica para soportar formato IP:PUERTO o solo IP
             if (targetNode.contains(":")) {
                 String[] parts = targetNode.split(":");
@@ -441,18 +456,20 @@ public class Nodo {
                 targetHost = targetNode;
                 // Si no especifican puerto en el txt, asumimos que usan el mismo puerto que yo
                 // (Arquitectura simétrica típica en Tailscale/Prod)
-                targetPort = this.port; 
+                targetPort = this.port;
             }
-    
-            // System.out.println("[BROADCAST] Enviando a: " + targetHost + ":" + targetPort);
-            
+
+            // System.out.println("[BROADCAST] Enviando a: " + targetHost + ":" +
+            // targetPort);
+
             // Evitar enviarme a mí mismo
-            // Verificamos IP y Puerto por si estamos en localhost probando puertos distintos
+            // Verificamos IP y Puerto por si estamos en localhost probando puertos
+            // distintos
             if (targetHost.equals(this.IP) && targetPort == this.port) {
                 // System.out.println("[BROADCAST] Saltando auto-envío");
-                continue; 
+                continue;
             }
-    
+
             // Construimos el mensaje CON MI IP Y PUERTO de retorno
             Mensaje msj = new Mensaje(type, this.id, this.name, this.IP, this.port, data);
             addDataToMessageQueue(targetHost, targetPort, msj);
@@ -462,32 +479,64 @@ public class Nodo {
     // =================================================================================
     // Getters y Setters
     // =================================================================================
-    public String getIP() { return IP; }
+    public String getIP() {
+        return IP;
+    }
 
-    public int getId() { return id; }
+    public int getId() {
+        return id;
+    }
 
-    public boolean isLeader() { return isLeader; }
+    public boolean isLeader() {
+        return isLeader;
+    }
 
-    public void setLeader(boolean leader) { isLeader = leader; }
+    public void setLeader(boolean leader) {
+        isLeader = leader;
+    }
 
-    public void setCandidateFailed(boolean candidateFailed) { this.candidateFailed = candidateFailed; }
+    public void setCandidateFailed(boolean candidateFailed) {
+        this.candidateFailed = candidateFailed;
+    }
 
-    public void setIP(String iP) { IP = iP; }
+    public void setIP(String iP) {
+        IP = iP;
+    }
 
-    public int getPort() { return port; }
+    public int getPort() {
+        return port;
+    }
 
-    public String getName() { return name; }
+    public String getName() {
+        return name;
+    }
 
-    public void setName(String name) { this.name = name; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public StorageManager getStorageManager() { return storageManager; }
-    
-    public String getNodeKey() { return this.IP + ":" + this.port; }
-    
-    public String getLeaderNodeKey() { return leaderNodeKey; }
-    
-    public void setLeaderNodeKey(String leaderNodeKey) { 
-        this.leaderNodeKey = leaderNodeKey; 
+    public StorageManager getStorageManager() {
+        return storageManager;
+    }
+
+    public String getNodeKey() {
+        return this.IP + ":" + this.port;
+    }
+
+    public String getLeaderNodeKey() {
+        return leaderNodeKey;
+    }
+
+    public void setLeaderNodeKey(String leaderNodeKey) {
+        this.leaderNodeKey = leaderNodeKey;
         System.out.println("[INFO] Líder actualizado a: " + leaderNodeKey);
+    }
+    
+    public void addFileToProcess(String fileName) {
+        filesBeingProcessed.add(fileName);
+    }
+    
+    public void removeFileFromProcess(String fileName) {
+        filesBeingProcessed.remove(fileName);
     }
 }
