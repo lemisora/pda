@@ -70,8 +70,20 @@ public class MessageManager implements Runnable {
             // Verificar si puedo ser líder y entrar en la elección
             case ALIVE -> {
                 nodo.bullyElectionVote(mensaje.getSenderId());
+                // En caso de seguir siendo líder por errores de red renunciar acá
+                if (nodo.isLeader() && mensaje.getSenderId() > nodo.getId()) {
+                    System.out.println("[CORRECCIÓN - Nodo (" + nodo.getName() + ")] Recibí ALIVE tardío de un mayor. Dejo de ser líder.");
+                    nodo.setLeader(false);
+                }
             }
             case HEARTBEAT -> {
+
+                if (nodo.isLeader() && mensaje.getSenderId() > nodo.getId()) {
+                    System.out.println("[Error - Nodo ( " + nodo.getName() + " ] Detecté un líder con mayor ID: " + "( "+ mensaje.getSenderId() + "). Renunciando a puesto líder.");
+                    nodo.setLeader(false);
+                    nodo.setCandidateFailed(false);
+                    break;
+                }
                 nodo.updateLastHeartbeat();
             }
             case NEW_LEADER -> {
