@@ -227,7 +227,7 @@ public class Nodo {
                 try {
                     Envio envio = colaEnvios.take();
                     sendEnvio(envio);
-                    Thread.sleep(1500);
+                    // Thread.sleep(1500);
                 } catch (InterruptedException e) {
                     // Thread.currentThread().interrupt();
                     break;
@@ -342,7 +342,7 @@ public class Nodo {
     private void sendEnvio(Envio envio) {
         try (Socket socket = new Socket(envio.destinoHost(), envio.destinoPort())) {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
+            // System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
             out.writeObject(envio.mensaje());
             // System.out.println("[SENDER - " + this.name + "] Enviando a " +
             // envio.destinoHost() + ":" + envio.destinoPort());

@@ -48,7 +48,9 @@ public class MessageManager implements Runnable {
      *                datos)
      */
     public void procesarMensaje(Mensaje mensaje) {
-        System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
+        // Para poner menos mensajes de Debug (excluir a los de heartbeat)
+        if (mensaje.getCommand() != CommandType.HEARTBEAT)
+            System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
         switch (mensaje.getCommand()) {
             // En este caso se ha iniciado una elección
             case WRITE -> {
