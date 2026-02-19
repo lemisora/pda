@@ -1,1 +1,4 @@
 # Agrega aquí las IPs de tus nodos (ej: 100.x.y.z)
+# Para pruebas locales usamos 127.0.0.1 y puertos distintos
+127.0.0.1:8080
+127.0.0.1:8081

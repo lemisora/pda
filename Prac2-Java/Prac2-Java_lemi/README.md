@@ -80,26 +80,4 @@ mvn compile exec:java -Dexec.mainClass="com.pda.App" -Dexec.args="--id 1 --port 
 ```
 
 Al iniciarse, los nodos comenzarán el proceso de elección, y después de unos segundos, el `nodo-gamma` (ID 3) debería anunciarse como el nuevo líder. Si detienes ese proceso, los nodos restantes (`alpha` y `beta`) iniciarán una nueva elección y `nodo-beta` (ID 2) se convertirá en el líder.
-
-## Cliente (GUI y CLI)
-
-El proyecto incluye dos formas de interactuar con el sistema distribuido desde la carpeta `client-gui`:
-
-### 1. Cliente Gráfico (JavaFX)
-Interfaz visual moderna para ver archivos y subirlos.
-
-```shell
-cd client-gui
-mvn clean javafx:run
-```
-
-### 2. Cliente de Línea de Comandos (CLI)
-Consola interactiva para listar y subir archivos comandos como `ls`, `upload` y `connect`.
-
-```shell
-cd client-gui
-# Uso: mvn exec:java -Dexec.mainClass="com.pda.client.ClientCLI" -Dexec.args="<IP_LIDER> <PUERTO_LIDER>"
-mvn clean compile && mvn exec:java -Dexec.mainClass="com.pda.client.ClientCLI" -Dexec.args="127.0.0.1 8080"
-```
-**Nota:** Asegúrate de conectar al puerto del nodo **líder** para poder realizar escrituras (`upload`). Si te conectas a un nodo seguidor, las escrituras serán rechazadas o ignoradas, aunque podrás ver la lista de archivos (`ls`).
 ```

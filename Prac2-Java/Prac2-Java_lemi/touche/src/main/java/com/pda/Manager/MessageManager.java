@@ -1,8 +1,8 @@
 package com.pda.Manager;
 
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.Socket;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -17,7 +17,7 @@ public class MessageManager implements Runnable {
 
     /**
      * Constructor de la clase MessageManager
-     * 
+     *
      * @param socket : socket de conexión con el cliente
      * @param nodo   : nodo al que corresponde este gestor de mensajes
      */
@@ -43,17 +43,16 @@ public class MessageManager implements Runnable {
 
     /**
      * Función para procesar el contenido del mensaje recibido
-     * 
+     *
      * @param mensaje : mensaje recibido de tipo Mensaje (clase contenedora de
      *                datos)
      */
     public void procesarMensaje(Mensaje mensaje) {
-        System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
+
+        if (mensaje.getCommand() != CommandType.HEARTBEAT)
+            System.out.println("[Nodo '" + nodo.getName() + "'] Mensaje recibido: " + mensaje.toString());
         switch (mensaje.getCommand()) {
             // En este caso se ha iniciado una elección
-            case WRITE -> {
-                System.out.println("Mensaje de escritura recibido: " + mensaje.getData());
-            }
             case HELLO -> {
                 // Si MI id es MAYOR que el del remitente, le respondo "ALIVE" (para callarlo)
                 if (nodo.getId() > mensaje.getSenderId()) {
@@ -75,11 +74,30 @@ public class MessageManager implements Runnable {
             // Verificar si puedo ser líder y entrar en la elección
             case ALIVE -> {
                 nodo.bullyElectionVote(mensaje.getSenderId());
+                // En caso de seguir siendo líder por errores de red renunciar acá
+                if (nodo.isLeader() && mensaje.getSenderId() > nodo.getId()) {
+                    System.out.println("[CORRECCIÓN - Nodo (" + nodo.getName()
+                            + ")] Recibí ALIVE tardío de un mayor. Dejo de ser líder.");
+                    nodo.setLeader(false);
+                }
             }
             case HEARTBEAT -> {
+
+                if (nodo.isLeader() && mensaje.getSenderId() > nodo.getId()) {
+                    System.err.println("[Nodo ( " + nodo.getName() + ") ] Detecté un líder con mayor ID: " + "( "
+                            + mensaje.getSenderId() + "). Renunciando a puesto líder.");
+                    nodo.setLeader(false);
+                    nodo.setCandidateFailed(false);
+                    break;
+                }
                 nodo.updateLastHeartbeat();
             }
             case NEW_LEADER -> {
+                // NO procesar mi propio mensaje
+                String senderKey = mensaje.getSenderHost() + ":" + mensaje.getSenderPort();
+                if (senderKey.equals(nodo.getNodeKey())) {
+                    return; // Ignorar silenciosamente
+                }
                 // Hay un nuevo líder oficial. Actualizo mi estado.
                 System.out.println(
                         "Nuevo Líder reconocido: " + mensaje.getSenderName() + " (ID: " + mensaje.getSenderId() + ")");
@@ -87,6 +105,8 @@ public class MessageManager implements Runnable {
                 nodo.setCandidateFailed(true); // Ya no intento ser líder
 
                 nodo.updateLastHeartbeat();
+
+                nodo.setLeaderNodeKey(senderKey);
             }
             case STORE_REQUEST -> handleStoreRequest(mensaje);
             case STORE_ASSIGNED -> handleStoreAssigned(mensaje);
@@ -116,7 +136,6 @@ public class MessageManager implements Runnable {
     }
 
     private void assignFileToNode(String fileName, String requesterIP, int requesterPort) {
-        System.out.println("[Debug] assignFileToNode -> Buscando duplicados...");
         // Verificar si el nodo ya tiene el archivo asignado
         if (nodo.getStorageManager().fileExistsInCatalog(fileName)) {
             System.out.println("[Líder] Archivo duplicado rechazado: " + fileName);
@@ -128,8 +147,6 @@ public class MessageManager implements Runnable {
             nodo.addDataToMessageQueue(requesterIP, requesterPort, rejection);
             return;
         }
-
-        System.out.println("[Debug] Archivo nuevo. Asignando a " + requesterIP + ":" + requesterPort);
         // Encontrar mejor nodo (por ahora, asignar al que pidió si tiene espacio)
         // TODO: Mejorar para buscar realmente el mejor nodo
         String targetIP = requesterIP;
@@ -141,7 +158,6 @@ public class MessageManager implements Runnable {
                 fileName);
 
         nodo.addDataToMessageQueue(targetIP, targetPort, assignment);
-        System.out.println("[Debug] Mensaje STORE_ASSIGNED encolado para " + targetIP + ":" + targetPort);
     }
 
     private void handleStoreAssigned(Mensaje mensaje) {
@@ -240,19 +256,20 @@ public class MessageManager implements Runnable {
 
         String statusData = mensaje.getData(); // Formato: "3/5"
         System.out.println("[Líder] Estado actualizado de " + mensaje.getSenderName() + ": " + statusData);
+
+        // TODO: Guardar en un Map<String, NodeStatus> para tener estado de todos los
+        // nodos
     }
 
     private void handleListRequest(Mensaje mensaje) {
-        System.out.println("[Debug] Procesando LIST_REQUEST de " + mensaje.getSenderName() + " ("
-                + mensaje.getSenderHost() + ":" + mensaje.getSenderPort() + ")");
-
         List<String> files;
+
         if (nodo.isLeader()) {
+            // Líder responde con catálogo global
             files = nodo.getStorageManager().listAllFiles();
-            System.out.println("[Debug] Soy líder. Archivos globales: " + files.size());
         } else {
+            // Nodo normal responde con sus archivos locales
             files = nodo.getStorageManager().listLocalFiles();
-            System.out.println("[Debug] Soy seguidor. Archivos locales: " + files.size());
         }
 
         String fileList = String.join(", ", files);
@@ -263,8 +280,6 @@ public class MessageManager implements Runnable {
                 fileList);
 
         nodo.addDataToMessageQueue(mensaje.getSenderHost(), mensaje.getSenderPort(), response);
-        System.out.println(
-                "[Debug] LIST_RESPONSE encolado para " + mensaje.getSenderHost() + ":" + mensaje.getSenderPort());
     }
 
     private void handleListResponse(Mensaje mensaje) {

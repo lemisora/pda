@@ -8,19 +8,16 @@ import java.nio.file.Paths;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pda.Constants.Net;
 import com.pda.Enums.CommandType;
 import com.pda.Manager.MessageManager;
-import com.pda.Manager.JsonRpcConnectionManager;
-import com.pda.Rpc.JsonRpcHandler;
 
 import com.pda.Manager.Security.NetFilter;
 import com.pda.Manager.StorageManager;
-
-import java.util.Set;
 
 /**
  * Clase para almacenar los nodos del sistema distribuido
@@ -29,11 +26,10 @@ public class Nodo {
 
     /**
      * Record para enviar datos a otros nodos
-     * 
+     *
      * @param destinoHost : IP del destino
      * @param destinoPort : puerto del destino
-     * @param mensaje     : mensaje a enviar de tipo Mensaje (clase contenedora de
-     *                    datos)
+     * @param mensaje     : mensaje a enviar de tipo Mensaje (clase contenedora de datos)
      */
     public record Envio(String destinoHost, int destinoPort, Mensaje mensaje) {
     }
@@ -52,21 +48,17 @@ public class Nodo {
     // Variables y constantes para el detector de fallos
     private volatile long lastHeartbeatTime = System.currentTimeMillis();
     private static final int HEARTBEAT_INTERVAL = 1000; // El líder envía cada 1s
-    private static final int FAILURE_TIMEOUT = 3500; // Si pasan 3.5s, el líder murió
+    private static final int FAILURE_TIMEOUT = 3500;    // Si pasan 3.5s, el líder murió
 
     private String IP;
     private int port;
     private String name;
     private int id; // Se usará para el algoritmo de bully
-    private StorageManager storageManager; // Gestor de almacenamiento para el nodo
+    private StorageManager storageManager;  // Gestor de almacenamiento para el nodo
     private String leaderNodeKey = null; // Clave del nodo líder (IP:PUERTO)
 
     // Threshold constante (por ahora)
     private static final int DEFAULT_THRESHOLD = 5;
-
-    // RPC
-    private JsonRpcHandler rpcHandler;
-    private int rpcPort;
 
     // Con esta variable se puede saber si es el nodo líder
     private boolean isLeader = false;
@@ -75,7 +67,7 @@ public class Nodo {
 
     /**
      * Constructor de la clase Node
-     * 
+     *
      * @param id   : Identificador numérico para el nodo
      * @param ip   : IP del nodo
      * @param port : Puerto del nodo
@@ -91,11 +83,6 @@ public class Nodo {
         // this.ipNodos = new ArrayList<>();
         // ToDo: Cargar las IPs válidas del sistema distribuido
         loadIPsFromFile("ips.txt");
-
-        // Inicializar RPC
-        this.rpcPort = port + 100;
-        this.rpcHandler = new JsonRpcHandler();
-        registerRpcMethods();
 
         try {
             this.storageManager = new StorageManager(DEFAULT_THRESHOLD, "./nodo_" + name);
@@ -146,15 +133,13 @@ public class Nodo {
         startSender();
         startReceiver();
         startDiscover();
-
         startFailureDetection();
-        startRpcServer();
         startFileWatcher();
     }
 
     /**
      * Función para elección de líder
-     * 
+     *
      * @param remoteNodeID : ID del nodo remoto
      */
     public void bullyElectionVote(int remoteNodeID) {
@@ -166,12 +151,14 @@ public class Nodo {
         }
     }
 
-    /** Función para convertirse en líder */
+    /**
+     * Función para convertirse en líder
+     */
     private void becomeLeader() {
         this.isLeader = true;
         this.candidateFailed = false; // Reiniciar estado
         this.leaderNodeKey = getNodeKey(); // Actualizar clave del líder (este mismo nodo)
-
+        
         System.out.println("[LIDER] ¡Soy el nuevo líder! (ID: " + this.id + ")");
 
         // Avisar a los demás
@@ -182,8 +169,7 @@ public class Nodo {
     }
 
     /**
-     * Función para iniciar el proceso de búsqueda de nodos en Red (y encontrar un
-     * nuevo líder, si solo hay un nodo entonces el líder es el mismo nodo)
+     * Función para iniciar el proceso de búsqueda de nodos en Red (y encontrar un nuevo líder, si solo hay un nodo entonces el líder es el mismo nodo)
      */
     private void startDiscover() {
         if (electionInProgress.getAndSet(true)) {
@@ -199,11 +185,11 @@ public class Nodo {
 
             broadcast(CommandType.HELLO, "Voten por un líder.");
 
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.getMessage();
-            }
+            // try {
+            //     Thread.sleep(3000);
+            // } catch (InterruptedException e) {
+            //     e.getMessage();
+            // }
 
             if (!candidateFailed && !isLeader) {
                 becomeLeader();
@@ -219,7 +205,10 @@ public class Nodo {
     }
 
     // Hilos anónimos lambda
-    /** Función para iniciar un hilo que envía peticiones a otros nodos */
+
+    /**
+     * Función para iniciar un hilo que envía peticiones a otros nodos
+     */
     private void startSender() {
         new Thread(() -> {
             System.out.println("Iniciando hilo de envío de comandos...");
@@ -227,16 +216,18 @@ public class Nodo {
                 try {
                     Envio envio = colaEnvios.take();
                     sendEnvio(envio);
-                    Thread.sleep(1500);
+                    // Thread.sleep(1500);
                 } catch (InterruptedException e) {
-                    // Thread.currentThread().interrupt();
+                    //Thread.currentThread().interrupt();
                     break;
                 }
             }
         }).start();
     }
 
-    /** Función para iniciar un hilo que recibe peticiones de otros nodos */
+    /**
+     * Función para iniciar un hilo que recibe peticiones de otros nodos
+     */
     private void startReceiver() {
         new Thread(() -> {
             try (ServerSocket serverSocket = new ServerSocket(this.port, 50, InetAddress.getByName(Net.listenIP))) {
@@ -245,10 +236,8 @@ public class Nodo {
                     Socket clientSocket = serverSocket.accept();
 
                     // Validar que la IP del cliente sea válida
-                    // System.out.println("Validando transmisor de mensaje -> " +
-                    // clientSocket.getInetAddress().getHostAddress());
-                    if (NetFilter.isTailscaleIP(clientSocket.getInetAddress())
-                            || NetFilter.isLocalhost(clientSocket.getInetAddress())) {
+                    // System.out.println("Validando transmisor de mensaje -> " + clientSocket.getInetAddress().getHostAddress());
+                    if (NetFilter.isTailscaleIP(clientSocket.getInetAddress()) || NetFilter.isLocalhost(clientSocket.getInetAddress())) {
                         executor.execute(new MessageManager(clientSocket, this));
                     } else {
                         System.err.println("Cliente no válido: " + clientSocket.getInetAddress().getHostAddress());
@@ -292,13 +281,11 @@ public class Nodo {
             while (true) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL);
-                    if (isLeader)
-                        continue;
+                    if (isLeader) continue;
                     long deltaHeartbeatTime = System.currentTimeMillis() - lastHeartbeatTime;
 
                     if (deltaHeartbeatTime > FAILURE_TIMEOUT) {
-                        System.err.println(
-                                "[Detector Service] El líder no responde desde hace " + deltaHeartbeatTime + " ms.");
+                        System.err.println("[Detector Service] El líder no responde desde hace " + deltaHeartbeatTime + " ms.");
                         System.out.println("[Detector Service] Iniciando una nueva elección de líder.");
 
                         // Se actualiza la última vez que se hizo un heartbeat para que no haya un bucle
@@ -313,104 +300,9 @@ public class Nodo {
     }
 
     /**
-     * Función para actualizar el tiempo en el que se mandó el último latido por
-     * parte del nodo Líder
-     */
-    public void updateLastHeartbeat() {
-        this.lastHeartbeatTime = System.currentTimeMillis();
-    }
-
-    /**
-     * Función para enviar llamadas (datos) a otros nodos - los añade a la cola de
-     * envíos
-     * 
-     * @param destinoHost : IP del destino
-     * @param destinoPort : puerto del destino
-     * @param mensaje     : mensaje a enviar de tipo Mensaje (clase contenedora de
-     *                    datos)
-     */
-    public void addDataToMessageQueue(String destinoHost, int destinoPort, Mensaje mensaje) {
-        colaEnvios.offer(new Envio(destinoHost, destinoPort, mensaje));
-    }
-
-    /**
-     * Función para enviar un mensaje a otro nodo
-     ** 
-     * @param envio : objeto de tipo 'Envio' que contiene la información de destino
-     *              y mensaje a enviar
-     */
-    private void sendEnvio(Envio envio) {
-        try (Socket socket = new Socket(envio.destinoHost(), envio.destinoPort())) {
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
-            out.writeObject(envio.mensaje());
-            // System.out.println("[SENDER - " + this.name + "] Enviando a " +
-            // envio.destinoHost() + ":" + envio.destinoPort());
-            out.close();
-        } catch (IOException e) {
-            System.err.println("[SENDER - " + this.name + "] Falló envío a " + envio.destinoHost() + ":"
-                    + envio.destinoPort() + " -> " + e.getMessage());
-        }
-    }
-
-    private void broadcast(CommandType type, String data) {
-        // Usamos la lista cargada desde el archivo
-        for (String targetNode : this.ipNodos) {
-
-            String targetHost;
-            int targetPort;
-
-            // Lógica para soportar formato IP:PUERTO o solo IP
-            if (targetNode.contains(":")) {
-                String[] parts = targetNode.split(":");
-                targetHost = parts[0];
-                targetPort = Integer.parseInt(parts[1]);
-            } else {
-                targetHost = targetNode;
-                // Si no especifican puerto en el txt, asumimos que usan el mismo puerto que yo
-                // (Arquitectura simétrica típica en Tailscale/Prod)
-                targetPort = this.port;
-            }
-
-            // Evitar enviarme a mí mismo
-            // Verificamos IP y Puerto por si estamos en localhost probando puertos
-            // distintos
-            if (targetHost.equals(this.IP) && targetPort == this.port) {
-                continue;
-            }
-
-            // Construimos el mensaje CON MI IP Y PUERTO de retorno
-            Mensaje msj = new Mensaje(type, this.id, this.name, this.IP, this.port, data);
-            addDataToMessageQueue(targetHost, targetPort, msj);
-        }
-    }
-
-    // ============ RPC SERVICES ============
-    private void registerRpcMethods() {
-        rpcHandler.registerMethod("ping", (req) -> "pong");
-        rpcHandler.registerMethod("info", (req) -> {
-            return "Node: " + name + " | ID: " + id + " | Leader: " + isLeader;
-        });
-    }
-
-    private void startRpcServer() {
-        new Thread(() -> {
-            try (ServerSocket serverSocket = new ServerSocket(this.rpcPort)) {
-                System.out.println("[RPC] Servidor iniciado en puerto " + this.rpcPort);
-                while (true) {
-                    Socket clientSocket = serverSocket.accept();
-                    new Thread(new JsonRpcConnectionManager(clientSocket, rpcHandler)).start();
-                }
-            } catch (IOException e) {
-                System.err.println("[RPC] Error iniciando servidor: " + e.getMessage());
-            }
-        }).start();
-    }
-
-    /**
      * Función para instanciar el servicio que detecta cambios de archivos
      */
-    private void startFileWatcher() {
+    private void startFileWatcher(){
         new Thread(() -> {
             System.out.println("[FileWatcher] Monitoreando archivos_entrada/");
             while (true) {
@@ -437,7 +329,7 @@ public class Nodo {
                         if (filesBeingProcessed.contains(fileName)) {
                             return; // Ya está siendo procesado
                         }
-
+                        
                         System.out.println("[FileWatcher] Nuevo archivo detectado: " + fileName);
                         filesBeingProcessed.add(fileName);
 
@@ -450,7 +342,7 @@ public class Nodo {
                             }
                         } catch (Exception e) {
                             System.err.println("Error procesando " + fileName + ": " + e.getMessage());
-                            filesBeingProcessed.remove(fileName); // Quitar si falla
+                            filesBeingProcessed.remove(fileName);   // Quitar si falla
                         }
                     });
         }
@@ -465,7 +357,7 @@ public class Nodo {
 
             // Quitar si guarda localmente
             filesBeingProcessed.remove(fileName);
-
+            
             // Reportar al líder
             reportStatusToLeader();
 
@@ -479,6 +371,12 @@ public class Nodo {
     private void requestStorageFromLeader(String fileName) {
         System.out.println("[Storage] Nodo lleno. Pidiendo al líder guardar: " + fileName);
 
+        Mensaje request = new Mensaje(
+                CommandType.STORE_REQUEST,
+                this.id, this.name, this.IP, this.port,
+                fileName
+        );
+
         // Enviar al líder (necesitarías guardar IP del líder)
         // Por ahora broadcast - mejorar después
         broadcast(CommandType.STORE_REQUEST, fileName);
@@ -487,21 +385,95 @@ public class Nodo {
     private void requestReplication(String fileName) {
         System.out.println("[Replication] Solicitando réplica para: " + fileName);
 
+        Mensaje request = new Mensaje(
+                CommandType.REPLICATE_FILE,
+                this.id, this.name, this.IP, this.port,
+                fileName
+        );
+
         broadcast(CommandType.REPLICATE_FILE, fileName);
     }
 
     private void reportStatusToLeader() {
-        if (isLeader)
-            return; // No reportarse a sí mismo
+        if (isLeader) return; // No reportarse a sí mismo
 
         NodeStatus status = storageManager.getStatus(this.IP, this.port);
 
         Mensaje statusMsg = new Mensaje(
                 CommandType.NODE_STATUS_UPDATE,
                 this.id, this.name, this.IP, this.port,
-                status.currentFiles() + "/" + status.threshold());
+                status.currentFiles() + "/" + status.threshold()
+        );
 
         broadcast(CommandType.NODE_STATUS_UPDATE, statusMsg.getData());
+    }
+
+    /**Función para actualizar el tiempo en el que se mandó el último latido por parte del nodo Líder */
+    public void updateLastHeartbeat(){
+        this.lastHeartbeatTime = System.currentTimeMillis();
+    }
+
+    /**
+    * Función para enviar llamadas (datos) a otros nodos - los añade a la cola de envíos
+    * @param destinoHost : IP del destino
+    * @param destinoPort : puerto del destino
+    * @param mensaje : mensaje a enviar de tipo Mensaje (clase contenedora de datos)
+    */
+    public void addDataToMessageQueue(String destinoHost, int destinoPort, Mensaje mensaje) {
+        colaEnvios.offer(new Envio(destinoHost, destinoPort, mensaje));
+    }
+    
+    /** Función para enviar un mensaje a otro nodo 
+    ** @param envio : objeto de tipo 'Envio' que contiene la información de destino y mensaje a enviar
+    */
+    private void sendEnvio(Envio envio){
+        try (Socket socket = new Socket(envio.destinoHost(), envio.destinoPort())) {
+            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            // System.out.println("Enviando petición a " + envio.destinoHost() + ":" + envio.destinoPort());
+            out.writeObject(envio.mensaje());
+            //System.out.println("[SENDER - " + this.name + "] Enviando a " + envio.destinoHost() + ":" + envio.destinoPort());
+            out.close();
+        } catch (IOException e) {
+            //System.err.println("[SENDER - " + this.name + "] Falló envío a "+envio.destinoHost());
+        }
+    }
+
+    private void broadcast(CommandType type, String data) {
+        // System.out.println("[BROADCAST] Enviando " + type + " a " + ipNodos.size() + " nodos");
+
+        // Usamos la lista cargada desde el archivo
+        for (String targetNode : this.ipNodos) {
+                
+            String targetHost;
+            int targetPort;
+
+            // Lógica para soportar formato IP:PUERTO o solo IP
+            if (targetNode.contains(":")) {
+                String[] parts = targetNode.split(":");
+                targetHost = parts[0];
+                targetPort = Integer.parseInt(parts[1]);
+            } else {
+                targetHost = targetNode;
+                // Si no especifican puerto en el txt, asumimos que usan el mismo puerto que yo
+                // (Arquitectura simétrica típica en Tailscale/Prod)
+                targetPort = this.port;
+            }
+
+            // System.out.println("[BROADCAST] Enviando a: " + targetHost + ":" +
+            // targetPort);
+
+            // Evitar enviarme a mí mismo
+            // Verificamos IP y Puerto por si estamos en localhost probando puertos
+            // distintos
+            if (targetHost.equals(this.IP) && targetPort == this.port) {
+                // System.out.println("[BROADCAST] Saltando auto-envío");
+                continue;
+            }
+
+            // Construimos el mensaje CON MI IP Y PUERTO de retorno
+            Mensaje msj = new Mensaje(type, this.id, this.name, this.IP, this.port, data);
+            addDataToMessageQueue(targetHost, targetPort, msj);
+        }
     }
 
     // =================================================================================
@@ -559,11 +531,11 @@ public class Nodo {
         this.leaderNodeKey = leaderNodeKey;
         System.out.println("[INFO] Líder actualizado a: " + leaderNodeKey);
     }
-
+    
     public void addFileToProcess(String fileName) {
         filesBeingProcessed.add(fileName);
     }
-
+    
     public void removeFileFromProcess(String fileName) {
         filesBeingProcessed.remove(fileName);
     }
